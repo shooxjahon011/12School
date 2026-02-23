@@ -4209,6 +4209,8 @@ def create_competition_from_test(request, test_id):
         return redirect('second_list')  # Bellashuvlar ro'yxati sahifasiga
 
     return render(request, 'teacher/create_competition.html', {'test': test})
+
+
 def create_test_view(request):
     if request.method == "POST":
         sinf = request.POST.get('sinf')
@@ -4216,170 +4218,169 @@ def create_test_view(request):
         title = request.POST.get('title')
 
         questions_list = []
+        # POST orqali kelgan barcha savollarni yig'ish
         for key in request.POST:
             if key.startswith('q_text_'):
                 num = key.split('_')[-1]
                 q_text = request.POST.get(f'q_text_{num}')
                 q_type = request.POST.get(f'q_type_{num}')
 
+                question_data = {
+                    'n': num,
+                    'savol': q_text,
+                    'turi': q_type,
+                }
+
                 if q_type == 'yopiq':
-                    ans = request.POST.get(f'q_ans_yopiq_{num}')
+                    # Variantlar matnini yig'ish
+                    question_data['v_a'] = request.POST.get(f'q_v_a_{num}')
+                    question_data['v_b'] = request.POST.get(f'q_v_b_{num}')
+                    question_data['v_c'] = request.POST.get(f'q_v_c_{num}')
+                    question_data['v_d'] = request.POST.get(f'q_v_d_{num}')
+                    question_data['javob'] = request.POST.get(f'q_ans_yopiq_{num}')
                 else:
-                    ans = request.POST.get(f'q_ans_ochiq_{num}')
+                    # Ochiq savol javobi
+                    question_data['javob'] = request.POST.get(f'q_ans_ochiq_{num}')
 
                 if q_text:
-                    questions_list.append({
-                        'n': num,
-                        'savol': q_text,
-                        'turi': q_type,
-                        'javob': ans
-                    })
+                    questions_list.append(question_data)
 
-        # O'qituvchining fanini olish
-        subject = Subject.objects.filter(teacher_user=request.user).first()
-        subj_name = subject.name if subject else "Noma'lum fan"
+        # Bu yerda o'zingizni TeacherTest modelingizga saqlash kodini yozing
+        # TeacherTest.objects.create(
+        #     teacher=request.user,
+        #     title=title,
+        #     questions=json.dumps(questions_list),
+        #     sinf=sinf,
+        #     parallel=parallel
+        # )
 
-        TeacherTest.objects.create(
-            teacher=request.user,
-            subject=subj_name,
-            title=title,
-            questions=json.dumps(questions_list),
-            correct_answers="mixed",
-            sinf=sinf,
-            parallel=parallel
-        )
         return redirect('/teacher-dashboard/')
 
+    # CSRF token olish
     token = get_token(request)
+
     return HttpResponse(f"""
 <!DOCTYPE html>
 <html lang="uz">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Yangi Test Yaratish</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <style>
-        :root {{ --neon: #00f2ff; --glass: rgba(0, 0, 0, 0.7); }}
+        :root {{ 
+            --neon: #00f2ff; 
+            --glass: rgba(10, 10, 10, 0.85); 
+            --border: rgba(0, 242, 255, 0.3); 
+        }}
 
         body {{ 
             margin: 0; 
             background: #000 url('/static/12.jpg') no-repeat center center fixed; 
             background-size: cover; 
-            font-family: 'Segoe UI', sans-serif; 
             color: white; 
+            font-family: 'Poppins', sans-serif; 
             padding-bottom: 100px;
         }}
 
-        /* Fonni qorong'ulash va xiralashtirish */
+        /* Orqa fonni bir oz qorong'ulashtirish */
         .overlay {{ 
             position: fixed; inset: 0; 
-            background: rgba(0, 0, 0, 0.75); 
-            backdrop-filter: blur(12px); 
+            background: rgba(0, 0, 0, 0.65); 
+            backdrop-filter: blur(8px); 
             z-index: -1; 
         }}
 
-        .container {{ max-width: 500px; margin: 0 auto; padding: 20px; }}
+        .container {{ max-width: 600px; margin: 0 auto; padding: 20px; }}
 
         .glass-card {{ 
             background: var(--glass); 
-            border: 1px solid rgba(0, 242, 255, 0.3); 
+            border: 1px solid var(--border); 
             border-radius: 30px; 
             padding: 25px; 
-            box-shadow: 0 0 30px rgba(0, 242, 255, 0.1);
+            box-shadow: 0 0 40px rgba(0,0,0,0.8);
         }}
 
-        h2 {{ text-align:center; color:var(--neon); text-transform:uppercase; letter-spacing:2px; font-size:20px; }}
+        h2 {{ 
+            text-align:center; color:var(--neon); 
+            text-transform:uppercase; font-size:20px; 
+            letter-spacing: 2px; margin-bottom: 25px;
+            text-shadow: 0 0 10px rgba(0, 242, 255, 0.5);
+        }}
 
         input, select, textarea {{
-            width: 100%; padding: 15px; margin-top: 10px;
-            background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1);
+            width: 100%; padding: 14px; margin-top: 10px;
+            background: rgba(255,255,255,0.08); 
+            border: 1px solid rgba(255,255,255,0.15);
             border-radius: 15px; color: white; outline: none; box-sizing: border-box;
+            font-size: 14px;
         }}
 
-        input:focus, textarea:focus {{ border-color: var(--neon); background: rgba(255,255,255,0.1); }}
+        input:focus, textarea:focus {{ border-color: var(--neon); background: rgba(255,255,255,0.12); }}
 
-        .count-selector {{
-            display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; margin: 20px 0;
-        }}
-
+        .count-selector {{ display: flex; justify-content: space-between; margin: 20px 0; gap: 8px; }}
         .count-btn {{
-            background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1);
-            padding: 12px; border-radius: 12px; color: white; cursor: pointer; text-align: center; font-size: 14px;
+            flex: 1; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.15);
+            padding: 12px; border-radius: 12px; color: white; cursor: pointer; text-align: center; transition: 0.3s;
         }}
-
-        .count-btn.active {{ background: var(--neon); color: black; font-weight: bold; box-shadow: 0 0 15px var(--neon); }}
+        .count-btn.active {{ background: var(--neon); color: #000; font-weight: bold; box-shadow: 0 0 20px var(--neon); }}
 
         .q-box {{
             background: rgba(255,255,255,0.03); border-radius: 20px; 
-            padding: 20px; margin-bottom: 20px; border-left: 5px solid var(--neon);
+            padding: 20px; margin-bottom: 25px; border-left: 5px solid var(--neon);
             animation: slideIn 0.4s ease-out;
         }}
 
         @keyframes slideIn {{ from {{ opacity:0; transform: translateY(20px); }} to {{ opacity:1; transform: translateY(0); }} }}
 
-        .type-switch {{ display: flex; gap: 10px; margin-bottom: 10px; }}
-        .type-btn {{ font-size: 11px; padding: 6px 15px; border-radius: 20px; cursor: pointer; border: 1px solid var(--neon); color: var(--neon); }}
+        .variants-grid {{ display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 15px; }}
+        .v-input {{ font-size: 13px !important; border-bottom: 1px solid var(--border) !important; }}
+
+        .type-switch {{ display: flex; gap: 10px; margin-bottom: 12px; }}
+        .type-btn {{ font-size: 11px; padding: 7px 16px; border-radius: 20px; cursor: pointer; border: 1px solid var(--neon); color: var(--neon); }}
         .type-btn.active {{ background: var(--neon); color: black; font-weight: bold; }}
 
         .save-btn {{
             width: 100%; padding: 20px; background: var(--neon); color: black;
-            border: none; border-radius: 20px; font-weight: 900; font-size: 16px;
-            cursor: pointer; box-shadow: 0 10px 30px rgba(0,242,255,0.3); margin-top: 20px;
+            border: none; border-radius: 20px; font-weight: 900; font-size: 18px;
+            cursor: pointer; box-shadow: 0 10px 30px rgba(0,242,255,0.4); margin-top: 10px;
+            text-transform: uppercase; letter-spacing: 1px;
         }}
-
-        /* Bottom Nav */
-        .bottom-nav {{ 
-            position: fixed; bottom: 0; left: 0; right: 0; height: 75px; 
-            background: rgba(10,10,10,0.95); backdrop-filter: blur(15px); 
-            border-top: 1px solid rgba(255,255,255,0.1); display: flex; 
-            justify-content: space-around; align-items: center; z-index: 1000; 
-        }}
-        .nav-item {{ text-decoration: none; color: #666; font-size: 10px; text-align: center; }}
-        .nav-item.active {{ color: var(--neon); }}
-        .nav-item i {{ font-size: 22px; display: block; margin-bottom: 4px; }}
     </style>
 </head>
 <body>
     <div class="overlay"></div>
     <div class="container">
         <div class="glass-card">
-            <h2><i class="fas fa-plus-circle"></i> Yangi Test</h2>
+            <h2><i class="fas fa-plus-circle"></i> Yangi Test Majmuasi</h2>
             <form method="POST">
                 <input type="hidden" name="csrfmiddlewaretoken" value="{token}">
 
                 <div style="display:flex; gap:10px;">
                     <input type="text" name="title" placeholder="Mavzu nomi" required>
-                    <input type="number" name="sinf" placeholder="Sinf" style="width:100px" required>
-                    <input type="text" name="parallel" placeholder="A" style="width:70px" required>
+                    <input type="number" name="sinf" placeholder="Sinf" style="width:90px" required>
+                    <input type="text" name="parallel" placeholder="Parallel (A)" style="width:75px" required>
                 </div>
 
-                <p style="font-size:13px; margin-top:20px; color:#888;">Savollar sonini tanlang:</p>
                 <div class="count-selector">
                     <div class="count-btn" onclick="generateQuestions(5)">5</div>
                     <div class="count-btn" onclick="generateQuestions(10)">10</div>
                     <div class="count-btn" onclick="generateQuestions(15)">15</div>
                     <div class="count-btn" onclick="generateQuestions(20)">20</div>
-                    <div class="count-btn" onclick="generateQuestions(50)">50</div>
                 </div>
 
                 <div id="questionsContainer"></div>
 
-                <button type="submit" class="save-btn">TASDIQLASH</button>
+                <button type="submit" class="save-btn">TESTNI YARATISH</button>
             </form>
         </div>
     </div>
-
-    <nav class="bottom-nav">
-        <a href="/teacher-dashboard/" class="nav-item"><i class="fas fa-home"></i><span>Asosiy</span></a>
-        <a href="/teacher-homeworks/" class="nav-item"><i class="fas fa-book"></i><span>Vazifalar</span></a>
-        <a href="/teacher-tests/" class="nav-item active"><i class="fas fa-tasks"></i><span>Testlar</span></a>
-        <a href="/teacher-profile/" class="nav-item"><i class="fas fa-user"></i><span>Profil</span></a>
-    </nav>
 
     <script>
         function generateQuestions(count) {{
             const container = document.getElementById('questionsContainer');
             container.innerHTML = '';
+
             document.querySelectorAll('.count-btn').forEach(btn => {{
                 btn.classList.remove('active');
                 if(btn.innerText == count) btn.classList.add('active');
@@ -4389,21 +4390,28 @@ def create_test_view(request):
                 const qBox = document.createElement('div');
                 qBox.className = 'q-box';
                 qBox.innerHTML = `
-                    <div style="display:flex; justify-content:space-between; align-items:center;">
-                        <span style="color:var(--neon); font-weight:bold;">S-${{i}}</span>
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+                        <span style="color:var(--neon); font-weight:bold; letter-spacing:1px;">SAVOL #${{i}}</span>
                         <div class="type-switch">
-                            <span class="type-btn active" id="btn_yopiq_${{i}}" onclick="setType(${{i}}, 'yopiq')">Yopiq</span>
-                            <span class="type-btn" id="btn_ochiq_${{i}}" onclick="setType(${{i}}, 'ochiq')">Ochiq</span>
+                            <span class="type-btn active" id="btn_y_${{i}}" onclick="setType(${{i}}, 'yopiq')">Varyantli</span>
+                            <span class="type-btn" id="btn_o_${{i}}" onclick="setType(${{i}}, 'ochiq')">Ochiq</span>
                         </div>
                     </div>
                     <input type="hidden" name="q_type_${{i}}" id="type_${{i}}" value="yopiq">
-                    <textarea name="q_text_${{i}}" placeholder="Savol matni..." rows="2" required></textarea>
-                    <div id="ans_area_${{i}}" style="margin-top:10px;">
-                        <select name="q_ans_yopiq_${{i}}">
-                            <option value="a">A javob to'g'ri</option>
-                            <option value="b">B javob to'g'ri</option>
-                            <option value="c">C javob to'g'ri</option>
-                            <option value="d">D javob to'g'ri</option>
+                    <textarea name="q_text_${{i}}" placeholder="Savol matnini kiriting..." rows="2" required></textarea>
+
+                    <div id="area_${{i}}">
+                        <div class="variants-grid">
+                            <input type="text" name="q_v_a_${{i}}" class="v-input" placeholder="A varianti" required>
+                            <input type="text" name="q_v_b_${{i}}" class="v-input" placeholder="B varianti" required>
+                            <input type="text" name="q_v_c_${{i}}" class="v-input" placeholder="C varianti" required>
+                            <input type="text" name="q_v_d_${{i}}" class="v-input" placeholder="D varianti" required>
+                        </div>
+                        <select name="q_ans_yopiq_${{i}}" style="margin-top:15px; border: 1px solid var(--neon);">
+                            <option value="a">A variant to'g'ri</option>
+                            <option value="b">B variant to'g'ri</option>
+                            <option value="c">C variant to'g'ri</option>
+                            <option value="d">D variant to'g'ri</option>
                         </select>
                     </div>
                 `;
@@ -4412,19 +4420,34 @@ def create_test_view(request):
         }}
 
         function setType(id, type) {{
-            const typeInput = document.getElementById('type_'+id);
-            const ansArea = document.getElementById('ans_area_'+id);
-            const btnY = document.getElementById('btn_yopiq_'+id);
-            const btnO = document.getElementById('btn_ochiq_'+id);
-            typeInput.value = type;
+            const area = document.getElementById('area_'+id);
+            const tInput = document.getElementById('type_'+id);
+            const btnY = document.getElementById('btn_y_'+id);
+            const btnO = document.getElementById('btn_o_'+id);
+            tInput.value = type;
+
             if(type === 'yopiq') {{
                 btnY.classList.add('active'); btnO.classList.remove('active');
-                ansArea.innerHTML = `<select name="q_ans_yopiq_${{id}}"><option value="a">A</option><option value="b">B</option><option value="c">C</option><option value="d">D</option></select>`;
+                area.innerHTML = `
+                    <div class="variants-grid">
+                        <input type="text" name="q_v_a_${{id}}" class="v-input" placeholder="A varianti" required>
+                        <input type="text" name="q_v_b_${{id}}" class="v-input" placeholder="B varianti" required>
+                        <input type="text" name="q_v_c_${{id}}" class="v-input" placeholder="C varianti" required>
+                        <input type="text" name="q_v_d_${{id}}" class="v-input" placeholder="D varianti" required>
+                    </div>
+                    <select name="q_ans_yopiq_${{id}}" style="margin-top:15px;">
+                        <option value="a">A variant to'g'ri</option>
+                        <option value="b">B variant to'g'ri</option>
+                        <option value="c">C variant to'g'ri</option>
+                        <option value="d">D variant to'g'ri</option>
+                    </select>`;
             }} else {{
                 btnO.classList.add('active'); btnY.classList.remove('active');
-                ansArea.innerHTML = `<input type="text" name="q_ans_ochiq_${{id}}" placeholder="Javobni yozing..." required>`;
+                area.innerHTML = `<input type="text" name="q_ans_ochiq_${{id}}" placeholder="To'g'ri javobni (so'z) kiriting..." required style="border-color:var(--neon);">`;
             }}
         }}
+
+        // Boshlanishiga 5 ta savol chiqarish
         generateQuestions(5);
     </script>
 </body>
