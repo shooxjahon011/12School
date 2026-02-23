@@ -25,7 +25,7 @@ SECRET_KEY = 'django-insecure-sp!jrwd2rc3s^przph&&ctejwzpon&@dy$t7qtewieqc3wk2%q
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = ['MaktabSayti.pythonanywhere.com']
 
 
 # Application definition
@@ -103,14 +103,15 @@ AUTH_PASSWORD_VALIDATORS = [
 # Internationalization
 # https://docs.djangoproject.com/en/5.2/topics/i18n/
 
-LANGUAGE_CODE = 'en-us'
+# settings.py fayli ichida:
 
-TIME_ZONE = 'UTC'
+LANGUAGE_CODE = 'uz' # Sayt tilini o'zbekchaga o'zgartiradi (agar tarjimalar bo'lsa)
+
+TIME_ZONE = 'Asia/Tashkent' # Toshkent vaqti (GMT+5)
 
 USE_I18N = True
 
 USE_TZ = True
-
 
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/5.2/howto/static-files/
