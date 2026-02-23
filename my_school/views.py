@@ -4205,11 +4205,11 @@ def create_competition_from_test(request, test_id):
 def create_test_view(request):
     if request.method == "POST":
         sinf = request.POST.get('sinf')
-        parallel = request.POST.get('parallel')
+        parallel = request.POST.get('parallel').upper()
         title = request.POST.get('title')
+        subject = "Informatika"
 
         questions_list = []
-        # POST orqali kelgan barcha savollarni yig'ish
         for key in request.POST:
             if key.startswith('q_text_'):
                 num = key.split('_')[-1]
@@ -4217,307 +4217,333 @@ def create_test_view(request):
                 q_type = request.POST.get(f'q_type_{num}')
 
                 question_data = {
-                    'n': num,
                     'savol': q_text,
                     'turi': q_type,
                 }
 
                 if q_type == 'yopiq':
-                    # Variantlar matnini yig'ish
                     question_data['v_a'] = request.POST.get(f'q_v_a_{num}')
                     question_data['v_b'] = request.POST.get(f'q_v_b_{num}')
                     question_data['v_c'] = request.POST.get(f'q_v_c_{num}')
                     question_data['v_d'] = request.POST.get(f'q_v_d_{num}')
                     question_data['javob'] = request.POST.get(f'q_ans_yopiq_{num}')
                 else:
-                    # Ochiq savol javobi
                     question_data['javob'] = request.POST.get(f'q_ans_ochiq_{num}')
 
                 if q_text:
                     questions_list.append(question_data)
 
-        # Bu yerda o'zingizni TeacherTest modelingizga saqlash kodini yozing
-        # TeacherTest.objects.create(
-        #     teacher=request.user,
-        #     title=title,
-        #     questions=json.dumps(questions_list),
-        #     sinf=sinf,
-        #     parallel=parallel
-        # )
-
+        TeacherTest.objects.create(
+            teacher=request.user,
+            title=title,
+            subject=subject,
+            questions=json.dumps(questions_list, ensure_ascii=False),
+            sinf=sinf,
+            parallel=parallel
+        )
         return redirect('/teacher-dashboard/')
 
-    # CSRF token olish
     token = get_token(request)
 
-    return HttpResponse(f"""
-<!DOCTYPE html>
-<html lang="uz">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Yangi Test Yaratish</title>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
-    <style>
-        :root {{ 
-            --neon: #00f2ff; 
-            --glass: rgba(10, 10, 10, 0.85); 
-            --border: rgba(0, 242, 255, 0.3); 
-        }}
+    html_content = f"""
+    <!DOCTYPE html>
+    <html lang="uz">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Yangi Test Yaratish</title>
+        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+        <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;800&display=swap" rel="stylesheet">
+        <style>
+            :root {{ 
+                --neon: #00f2ff; 
+                --glass: rgba(10, 10, 10, 0.8); 
+                --border: rgba(0, 242, 255, 0.3); 
+            }}
+            body {{ 
+                margin: 0; 
+                background: #000 url('/static/12.jpg') no-repeat center center fixed; 
+                background-size: cover; 
+                color: white; 
+                font-family: 'Poppins', sans-serif; 
+                padding-bottom: 50px;
+            }}
+            .overlay {{ 
+                position: fixed; inset: 0; 
+                background: rgba(0, 0, 0, 0.75); 
+                backdrop-filter: blur(12px); 
+                z-index: -1; 
+            }}
+            .container {{ max-width: 600px; margin: 0 auto; padding: 20px; }}
+            .glass-card {{ 
+                background: var(--glass); 
+                border: 1px solid var(--border); 
+                border-radius: 35px; 
+                padding: 30px; 
+                box-shadow: 0 20px 50px rgba(0,0,0,0.5); 
+                backdrop-filter: blur(10px);
+            }}
+            h2 {{ 
+                text-align:center; color:var(--neon); 
+                text-transform:uppercase; font-size:22px; 
+                letter-spacing: 2px; margin-bottom: 30px;
+                text-shadow: 0 0 15px rgba(0,242,255,0.4);
+            }}
+            input, select, textarea {{ 
+                width: 100%; padding: 15px; margin-top: 10px; 
+                background: rgba(255,255,255,0.06); 
+                border: 1px solid rgba(255,255,255,0.1); 
+                border-radius: 15px; color: white; outline: none; box-sizing: border-box; 
+                font-family: inherit;
+            }}
+            input:focus, textarea:focus {{ border-color: var(--neon); background: rgba(255,255,255,0.1); }}
 
-        body {{ 
-            margin: 0; 
-            background: #000 url('/static/12.jpg') no-repeat center center fixed; 
-            background-size: cover; 
-            color: white; 
-            font-family: 'Poppins', sans-serif; 
-            padding-bottom: 100px;
-        }}
+            .count-selector {{ display: flex; justify-content: space-between; margin: 25px 0; gap: 10px; }}
+            .count-btn {{ 
+                flex: 1; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); 
+                padding: 12px; border-radius: 15px; color: white; cursor: pointer; 
+                text-align: center; transition: 0.3s; font-weight: 600;
+            }}
+            .count-btn.active {{ background: var(--neon); color: #000; box-shadow: 0 0 20px rgba(0,242,255,0.4); }}
 
-        /* Orqa fonni bir oz qorong'ulashtirish */
-        .overlay {{ 
-            position: fixed; inset: 0; 
-            background: rgba(0, 0, 0, 0.65); 
-            backdrop-filter: blur(8px); 
-            z-index: -1; 
-        }}
+            .q-box {{ 
+                background: rgba(255,255,255,0.03); border-radius: 25px; 
+                padding: 20px; margin-bottom: 25px; border-left: 6px solid var(--neon);
+                animation: fadeIn 0.5s ease;
+            }}
+            @keyframes fadeIn {{ from {{ opacity:0; transform: translateY(10px); }} to {{ opacity:1; transform: translateY(0); }} }}
 
-        .container {{ max-width: 600px; margin: 0 auto; padding: 20px; }}
+            .variants-grid {{ display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 15px; }}
+            .type-switch {{ display: flex; gap: 8px; }}
+            .type-btn {{ 
+                font-size: 11px; padding: 6px 14px; border-radius: 20px; 
+                cursor: pointer; border: 1px solid var(--neon); color: var(--neon); 
+                text-transform: uppercase; font-weight: bold;
+            }}
+            .type-btn.active {{ background: var(--neon); color: black; }}
 
-        .glass-card {{ 
-            background: var(--glass); 
-            border: 1px solid var(--border); 
-            border-radius: 30px; 
-            padding: 25px; 
-            box-shadow: 0 0 40px rgba(0,0,0,0.8);
-        }}
+            .save-btn {{ 
+                width: 100%; padding: 22px; background: var(--neon); color: black; 
+                border: none; border-radius: 25px; font-weight: 900; font-size: 18px; 
+                cursor: pointer; margin-top: 20px; text-transform: uppercase;
+                box-shadow: 0 10px 30px rgba(0,242,255,0.3); transition: 0.3s;
+            }}
+            .save-btn:hover {{ transform: translateY(-3px); box-shadow: 0 15px 40px rgba(0,242,255,0.5); }}
+        </style>
+    </head>
+    <body>
+        <div class="overlay"></div>
+        <div class="container">
+            <div class="glass-card">
+                <h2><i class="fas fa-plus-circle" style="margin-right:10px;"></i>Yangi Test Majmuasi</h2>
+                <form method="POST">
+                    <input type="hidden" name="csrfmiddlewaretoken" value="{token}">
 
-        h2 {{ 
-            text-align:center; color:var(--neon); 
-            text-transform:uppercase; font-size:20px; 
-            letter-spacing: 2px; margin-bottom: 25px;
-            text-shadow: 0 0 10px rgba(0, 242, 255, 0.5);
-        }}
+                    <div style="display:flex; gap:12px;">
+                        <input type="text" name="title" placeholder="Mavzu nomi" required>
+                        <input type="number" name="sinf" placeholder="Sinf" style="width:100px" required>
+                        <input type="text" name="parallel" placeholder="A" style="width:80px" required>
+                    </div>
 
-        input, select, textarea {{
-            width: 100%; padding: 14px; margin-top: 10px;
-            background: rgba(255,255,255,0.08); 
-            border: 1px solid rgba(255,255,255,0.15);
-            border-radius: 15px; color: white; outline: none; box-sizing: border-box;
-            font-size: 14px;
-        }}
+                    <div class="count-selector">
+                        <div class="count-btn" onclick="generateQuestions(5, event)">5</div>
+                        <div class="count-btn" onclick="generateQuestions(10, event)">10</div>
+                        <div class="count-btn" onclick="generateQuestions(15, event)">15</div>
+                        <div class="count-btn" onclick="generateQuestions(25, event)">25</div>
+                    </div>
 
-        input:focus, textarea:focus {{ border-color: var(--neon); background: rgba(255,255,255,0.12); }}
+                    <div id="questionsContainer"></div>
 
-        .count-selector {{ display: flex; justify-content: space-between; margin: 20px 0; gap: 8px; }}
-        .count-btn {{
-            flex: 1; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.15);
-            padding: 12px; border-radius: 12px; color: white; cursor: pointer; text-align: center; transition: 0.3s;
-        }}
-        .count-btn.active {{ background: var(--neon); color: #000; font-weight: bold; box-shadow: 0 0 20px var(--neon); }}
-
-        .q-box {{
-            background: rgba(255,255,255,0.03); border-radius: 20px; 
-            padding: 20px; margin-bottom: 25px; border-left: 5px solid var(--neon);
-            animation: slideIn 0.4s ease-out;
-        }}
-
-        @keyframes slideIn {{ from {{ opacity:0; transform: translateY(20px); }} to {{ opacity:1; transform: translateY(0); }} }}
-
-        .variants-grid {{ display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 15px; }}
-        .v-input {{ font-size: 13px !important; border-bottom: 1px solid var(--border) !important; }}
-
-        .type-switch {{ display: flex; gap: 10px; margin-bottom: 12px; }}
-        .type-btn {{ font-size: 11px; padding: 7px 16px; border-radius: 20px; cursor: pointer; border: 1px solid var(--neon); color: var(--neon); }}
-        .type-btn.active {{ background: var(--neon); color: black; font-weight: bold; }}
-
-        .save-btn {{
-            width: 100%; padding: 20px; background: var(--neon); color: black;
-            border: none; border-radius: 20px; font-weight: 900; font-size: 18px;
-            cursor: pointer; box-shadow: 0 10px 30px rgba(0,242,255,0.4); margin-top: 10px;
-            text-transform: uppercase; letter-spacing: 1px;
-        }}
-    </style>
-</head>
-<body>
-    <div class="overlay"></div>
-    <div class="container">
-        <div class="glass-card">
-            <h2><i class="fas fa-plus-circle"></i> Yangi Test Majmuasi</h2>
-            <form method="POST">
-                <input type="hidden" name="csrfmiddlewaretoken" value="{token}">
-
-                <div style="display:flex; gap:10px;">
-                    <input type="text" name="title" placeholder="Mavzu nomi" required>
-                    <input type="number" name="sinf" placeholder="Sinf" style="width:90px" required>
-                    <input type="text" name="parallel" placeholder="Parallel (A)" style="width:75px" required>
-                </div>
-
-                <div class="count-selector">
-                    <div class="count-btn" onclick="generateQuestions(5)">5</div>
-                    <div class="count-btn" onclick="generateQuestions(10)">10</div>
-                    <div class="count-btn" onclick="generateQuestions(15)">15</div>
-                    <div class="count-btn" onclick="generateQuestions(20)">20</div>
-                </div>
-
-                <div id="questionsContainer"></div>
-
-                <button type="submit" class="save-btn">TESTNI YARATISH</button>
-            </form>
+                    <button type="submit" class="save-btn">TESTNI SAQLASH</button>
+                </form>
+            </div>
         </div>
-    </div>
 
-    <script>
-        function generateQuestions(count) {{
-            const container = document.getElementById('questionsContainer');
-            container.innerHTML = '';
+        <script>
+            function generateQuestions(count, event) {{
+                const container = document.getElementById('questionsContainer');
+                container.innerHTML = '';
 
-            document.querySelectorAll('.count-btn').forEach(btn => {{
-                btn.classList.remove('active');
-                if(btn.innerText == count) btn.classList.add('active');
-            }});
+                if(event) {{
+                    document.querySelectorAll('.count-btn').forEach(btn => btn.classList.remove('active'));
+                    event.target.classList.add('active');
+                }}
 
-            for(let i=1; i<=count; i++) {{
-                const qBox = document.createElement('div');
-                qBox.className = 'q-box';
-                qBox.innerHTML = `
-                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
-                        <span style="color:var(--neon); font-weight:bold; letter-spacing:1px;">SAVOL #${{i}}</span>
-                        <div class="type-switch">
-                            <span class="type-btn active" id="btn_y_${{i}}" onclick="setType(${{i}}, 'yopiq')">Varyantli</span>
-                            <span class="type-btn" id="btn_o_${{i}}" onclick="setType(${{i}}, 'ochiq')">Ochiq</span>
+                for(let i=1; i<=count; i++) {{
+                    const qBox = document.createElement('div');
+                    qBox.className = 'q-box';
+                    qBox.innerHTML = `
+                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+                            <span style="color:var(--neon); font-weight:bold; font-size:14px;">SAVOL #${{i}}</span>
+                            <div class="type-switch">
+                                <span class="type-btn active" id="btn_y_${{i}}" onclick="setType(${{i}}, 'yopiq')">Variantli</span>
+                                <span class="type-btn" id="btn_o_${{i}}" onclick="setType(${{i}}, 'ochiq')">Ochiq</span>
+                            </div>
                         </div>
-                    </div>
-                    <input type="hidden" name="q_type_${{i}}" id="type_${{i}}" value="yopiq">
-                    <textarea name="q_text_${{i}}" placeholder="Savol matnini kiriting..." rows="2" required></textarea>
+                        <input type="hidden" name="q_type_${{i}}" id="type_${{i}}" value="yopiq">
+                        <textarea name="q_text_${{i}}" placeholder="Savol matni..." required rows="2"></textarea>
+                        <div id="area_${{i}}">
+                            <div class="variants-grid">
+                                <input type="text" name="q_v_a_${{i}}" placeholder="A varianti" required>
+                                <input type="text" name="q_v_b_${{i}}" placeholder="B varianti" required>
+                                <input type="text" name="q_v_c_${{i}}" placeholder="C varianti" required>
+                                <input type="text" name="q_v_d_${{i}}" placeholder="D varianti" required>
+                            </div>
+                            <select name="q_ans_yopiq_${{i}}" style="border: 1px solid var(--neon); color: var(--neon);">
+                                <option value="a">A to'g'ri javob</option>
+                                <option value="b">B to'g'ri javob</option>
+                                <option value="c">C to'g'ri javob</option>
+                                <option value="d">D to'g'ri javob</option>
+                            </select>
+                        </div>`;
+                    container.appendChild(qBox);
+                }}
+            }}
 
-                    <div id="area_${{i}}">
+            function setType(id, type) {{
+                const area = document.getElementById('area_'+id);
+                document.getElementById('type_'+id).value = type;
+                document.getElementById('btn_y_'+id).classList.toggle('active', type==='yopiq');
+                document.getElementById('btn_o_'+id).classList.toggle('active', type==='ochiq');
+
+                if(type === 'yopiq') {{
+                    area.innerHTML = `
                         <div class="variants-grid">
-                            <input type="text" name="q_v_a_${{i}}" class="v-input" placeholder="A varianti" required>
-                            <input type="text" name="q_v_b_${{i}}" class="v-input" placeholder="B varianti" required>
-                            <input type="text" name="q_v_c_${{i}}" class="v-input" placeholder="C varianti" required>
-                            <input type="text" name="q_v_d_${{i}}" class="v-input" placeholder="D varianti" required>
+                            <input type="text" name="q_v_a_${{id}}" placeholder="A varianti" required>
+                            <input type="text" name="q_v_b_${{id}}" placeholder="B varianti" required>
+                            <input type="text" name="q_v_c_${{id}}" placeholder="C varianti" required>
+                            <input type="text" name="q_v_d_${{id}}" placeholder="D varianti" required>
                         </div>
-                        <select name="q_ans_yopiq_${{i}}" style="margin-top:15px; border: 1px solid var(--neon);">
-                            <option value="a">A variant to'g'ri</option>
-                            <option value="b">B variant to'g'ri</option>
-                            <option value="c">C variant to'g'ri</option>
-                            <option value="d">D variant to'g'ri</option>
-                        </select>
-                    </div>
-                `;
-                container.appendChild(qBox);
+                        <select name="q_ans_yopiq_${{id}}">
+                            <option value="a">A to'g'ri</option><option value="b">B to'g'ri</option>
+                            <option value="c">C to'g'ri</option><option value="d">D to'g'ri</option>
+                        </select>`;
+                }} else {{
+                    area.innerHTML = `<input type="text" name="q_ans_ochiq_${{id}}" placeholder="To'g'ri javobni (so'z) yozing..." required style="border-color:var(--neon);">`;
+                }}
             }}
-        }}
 
-        function setType(id, type) {{
-            const area = document.getElementById('area_'+id);
-            const tInput = document.getElementById('type_'+id);
-            const btnY = document.getElementById('btn_y_'+id);
-            const btnO = document.getElementById('btn_o_'+id);
-            tInput.value = type;
-
-            if(type === 'yopiq') {{
-                btnY.classList.add('active'); btnO.classList.remove('active');
-                area.innerHTML = `
-                    <div class="variants-grid">
-                        <input type="text" name="q_v_a_${{id}}" class="v-input" placeholder="A varianti" required>
-                        <input type="text" name="q_v_b_${{id}}" class="v-input" placeholder="B varianti" required>
-                        <input type="text" name="q_v_c_${{id}}" class="v-input" placeholder="C varianti" required>
-                        <input type="text" name="q_v_d_${{id}}" class="v-input" placeholder="D varianti" required>
-                    </div>
-                    <select name="q_ans_yopiq_${{id}}" style="margin-top:15px;">
-                        <option value="a">A variant to'g'ri</option>
-                        <option value="b">B variant to'g'ri</option>
-                        <option value="c">C variant to'g'ri</option>
-                        <option value="d">D variant to'g'ri</option>
-                    </select>`;
-            }} else {{
-                btnO.classList.add('active'); btnY.classList.remove('active');
-                area.innerHTML = `<input type="text" name="q_ans_ochiq_${{id}}" placeholder="To'g'ri javobni (so'z) kiriting..." required style="border-color:var(--neon);">`;
-            }}
-        }}
-
-        // Boshlanishiga 5 ta savol chiqarish
-        generateQuestions(5);
-    </script>
-</body>
-</html>
-    """)
+            // Dastlabki 5 ta savolni yuklash
+            window.onload = () => {{
+                generateQuestions(5);
+                document.querySelector('.count-btn').classList.add('active');
+            }};
+        </script>
+    </body>
+    </html>
+    """
+    return HttpResponse(html_content)
 def student_test_list(request):
-    # O'quvchi profilini olish
-    student = Profile.objects.filter(login=request.user.username).first()
+    # 1. O'quvchini aniqlash
+    user_login = request.session.get('user_login') or request.user.username
+    student = Profile.objects.filter(login=user_login).first()
 
-    # O'quvchining sinfi va paralleliga mos testlarni olish
-    tests = TeacherTest.objects.filter(
-        sinf=student.sinf,
-        parallel=student.parallel
-    ).order_by('-id') if student else []
+    # 2. O'quvchining sinfi va paralleliga mos testlarni olish
+    if student:
+        tests = TeacherTest.objects.filter(
+            sinf=student.sinf,
+            parallel=student.parallel.upper()
+        ).order_by('-id')
+    else:
+        tests = []
 
+    # 3. Testlar ro'yxati HTML qismini shakllantirish
     list_html = ""
     if tests:
         for t in tests:
             list_html += f'''
-            <div style="background:rgba(255,255,255,0.05); padding:20px; border-radius:25px; margin-bottom:15px; border: 1px solid rgba(255,255,255,0.1); display:flex; justify-content:space-between; align-items:center; backdrop-filter:blur(5px);">
-                <div>
-                    <div style="font-weight:bold; color:#fff; font-size:16px;">{t.title}</div>
-                    <div style="color:#00f2ff; font-size:12px; margin-top:4px;">
-                        <i class="fas fa-graduation-cap"></i> {t.sinf}-{t.parallel} | <i class="fas fa-book"></i> {t.subject}
+            <div style="background:rgba(255,255,255,0.07); padding:20px; border-radius:25px; margin-bottom:15px; border: 1px solid rgba(255,255,255,0.1); display:flex; justify-content:space-between; align-items:center; backdrop-filter:blur(10px); border-left: 5px solid #00f2ff; box-shadow: 0 10px 30px rgba(0,0,0,0.3);">
+                <div style="flex: 1; padding-right: 15px;">
+                    <div style="font-weight:bold; color:#fff; font-size:16px; letter-spacing:0.5px;">{t.title}</div>
+                    <div style="color:#00f2ff; font-size:12px; margin-top:6px; display:flex; gap:12px; opacity:0.9;">
+                        <span><i class="fas fa-graduation-cap"></i> {t.sinf}-{t.parallel}</span>
+                        <span><i class="fas fa-book"></i> {t.subject}</span>
                     </div>
                 </div>
-                <a href="/solve-test/{t.id}/" style="background:#00f2ff; color:black; padding:10px 20px; border-radius:15px; text-decoration:none; font-weight:900; font-size:13px; box-shadow: 0 5px 15px rgba(0,242,255,0.3); transition:0.3s;">
-                    BOSHLASH
+                <a href="/solve-test/{t.id}/" style="background:#00f2ff; color:black; padding:12px 22px; border-radius:18px; text-decoration:none; font-weight:900; font-size:13px; box-shadow: 0 5px 15px rgba(0,242,255,0.4); transition:0.3s; white-space:nowrap; text-transform:uppercase;">
+                    Boshlash
                 </a>
             </div>'''
     else:
         list_html = '''
-        <div style="text-align:center; padding:50px; color:#666;">
-            <i class="fas fa-box-open" style="font-size:40px; margin-bottom:10px;"></i>
-            <p>Hozircha testlar mavjud emas</p>
+        <div style="text-align:center; padding:60px 20px; color:#888; background:rgba(255,255,255,0.03); border-radius:30px; border:1px dashed rgba(255,255,255,0.1); backdrop-filter:blur(10px);">
+            <i class="fas fa-box-open" style="font-size:50px; margin-bottom:15px; color:#333;"></i>
+            <p style="margin:0; font-size:15px;">Hozircha sizning sinfingiz uchun<br>testlar mavjud emas</p>
         </div>'''
 
+    # 4. To'liq sahifani qaytarish
     return HttpResponse(f"""
 <!DOCTYPE html>
 <html lang="uz">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Testlar Markazi</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;800&display=swap" rel="stylesheet">
     <style>
         body {{ 
-            margin: 0; background: #000 url('/static/12.jpg') no-repeat center center fixed; 
-            background-size: cover; font-family: 'Segoe UI', sans-serif; color: white; 
+            margin: 0; 
+            padding: 0;
+            background: #000 url('/static/12.jpg') no-repeat center center fixed; 
+            background-size: cover; 
+            font-family: 'Poppins', sans-serif; 
+            color: white; 
+            min-height: 100vh;
         }}
         .overlay {{ 
             position: fixed; inset: 0; background: rgba(0,0,0,0.8); 
             backdrop-filter: blur(15px); z-index: -1; 
         }}
-        .container {{ max-width: 480px; margin: 0 auto; padding: 20px; }}
-        h2 {{ color: #00f2ff; text-align: center; letter-spacing: 2px; text-transform: uppercase; margin-bottom: 30px; font-weight: 900; }}
+        .container {{ max-width: 480px; margin: 0 auto; padding: 40px 20px 120px 20px; }}
+
+        h2 {{ 
+            color: #00f2ff; text-align: center; letter-spacing: 4px; 
+            text-transform: uppercase; margin-bottom: 5px; font-weight: 800;
+            text-shadow: 0 0 20px rgba(0,242,255,0.5);
+            font-size: 26px;
+        }}
 
         .bottom-nav {{ 
-            position: fixed; bottom: 0; left: 0; right: 0; height: 75px; 
-            background: rgba(10,10,10,0.9); backdrop-filter: blur(20px); 
+            position: fixed; bottom: 0; left: 0; right: 0; height: 85px; 
+            background: rgba(10,10,10,0.9); backdrop-filter: blur(25px); 
             border-top: 1px solid rgba(255,255,255,0.1); display: flex; 
             justify-content: space-around; align-items: center; z-index: 1000; 
+            padding-bottom: env(safe-area-inset-bottom);
         }}
-        .nav-item {{ text-decoration: none; color: #555; font-size: 10px; text-align: center; }}
-        .nav-item.active {{ color: #00f2ff; }}
-        .nav-item i {{ font-size: 22px; display: block; margin-bottom: 4px; }}
+        .nav-item {{ text-decoration: none; color: #666; font-size: 11px; text-align: center; transition: 0.3s; }}
+        .nav-item.active {{ color: #00f2ff; transform: translateY(-5px); font-weight: 600; }}
+        .nav-item i {{ font-size: 26px; display: block; margin-bottom: 5px; }}
+        .nav-item.active i {{ text-shadow: 0 0 15px rgba(0,242,255,0.6); }}
+
+        a:active {{ transform: scale(0.95); }}
     </style>
 </head>
 <body>
     <div class="overlay"></div>
+
     <div class="container">
-        <h2><i class="fas fa-list-check"></i> TESTLAR</h2>
+        <h2>TESTLAR</h2>
+        <div style="margin-bottom:35px; font-size:12px; color:#555; text-align:center; text-transform:uppercase; letter-spacing:1px;">
+            Sinf: <span style="color:#00f2ff;">{student.sinf}-{student.parallel if student else '---'}</span>
+        </div>
+
         {list_html}
     </div>
 
     <nav class="bottom-nav">
-        <a href="/second/" class="nav-item"><i class="fas fa-home"></i><span>Asosiy</span></a>
-        <a href="/subjects/" class="nav-item"><i class="fas fa-book-open"></i><span>Vazifalar</span></a>
-        <a href="/compete/" class="nav-item active"><i class="fas fa-vial"></i><span>Testlar</span></a>
-        <a href="/profile/" class="nav-item"><i class="fas fa-user"></i><span>Profil</span></a>
+        <a href="/second/" class="nav-item">
+            <i class="fas fa-home"></i><span>Asosiy</span>
+        </a>
+        <a href="/subjects/" class="nav-item">
+            <i class="fas fa-book-open"></i><span>Vazifalar</span>
+        </a>
+        <a href="/compete/" class="nav-item active">
+            <i class="fas fa-vial"></i><span>Testlar</span>
+        </a>
+        <a href="/profile/" class="nav-item">
+            <i class="fas fa-user"></i><span>Profil</span>
+        </a>
     </nav>
 </body>
 </html>
@@ -4538,66 +4564,131 @@ def solve_test_view(request, test_id):
         for i, q in enumerate(current_questions, 1):
             user_ans = request.POST.get(f'q_{i}')
             if user_ans:
-                # Javobni tozalab, kichik harfga o'tkazib tekshiramiz
                 if str(user_ans).strip().lower() == str(q['javob']).strip().lower():
                     score += 1
 
-        student = Profile.objects.filter(login=request.user.username).first()
+        user_login = request.session.get('user_login') or request.user.username
+        student = Profile.objects.filter(login=user_login).first()
+
+        points_won = 0
         if student:
-            student.points += (score * 5)
+            points_won = score * 5
+            student.points += points_won
             student.save()
 
-            # MUHIM: created_at xatosini oldini olish uchun timezone.now() qo'shildi
             TestResult.objects.create(
                 student=student,
                 test=test,
                 score=score,
-                date=timezone.now() # Agar modelda nomi 'date' bo'lsa
-                # created_at=timezone.now() # Agar modelda nomi 'created_at' bo'lsa
+                date=timezone.now()
             )
 
         return HttpResponse(f"""
-            <body style="background:#0a0a0a; color:white; font-family:sans-serif; text-align:center; padding-top:100px;">
-                <h1 style="color:#00f2ff;">TEST YAKUNLANDI!</h1>
-                <p style="font-size:24px;">Natijangiz: {score} / {total}</p>
-                <p style="color:#888;">Profil vaqtingizga {(score * 5)} XP qo'shildi.</p>
-                <br>
-                <a href="/compete/" style="padding:15px 30px; background:#00f2ff; color:black; text-decoration:none; border-radius:15px; font-weight:bold;">MARKAZGA QAYTISH</a>
+            <!DOCTYPE html>
+            <html lang="uz">
+            <head>
+                <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+                <style>
+                    body {{ 
+                        margin:0; padding:0; height:100vh; display:flex; align-items:center; justify-content:center;
+                        background: url('/static/12.jpg') no-repeat center center fixed; 
+                        background-size: cover; font-family: 'Poppins', sans-serif;
+                    }}
+                    .overlay {{ position:fixed; inset:0; background:rgba(0,0,0,0.85); backdrop-filter:blur(20px); z-index:1; }}
+                    .result-card {{ 
+                        position:relative; z-index:10; background:rgba(255,255,255,0.05); 
+                        padding:40px; border-radius:35px; border:1px solid rgba(0,242,255,0.3); 
+                        text-align:center; max-width:400px; width:90%; color:white;
+                    }}
+                </style>
+            </head>
+            <body>
+                <div class="overlay"></div>
+                <div class="result-card">
+                    <i class="fas fa-trophy" style="font-size:60px; color:#00f2ff; margin-bottom:20px;"></i>
+                    <h1 style="margin:0; color:#00f2ff; letter-spacing:2px;">NATIJA</h1>
+                    <div style="font-size:48px; font-weight:900; margin:20px 0;">{score} / {total}</div>
+                    <p style="color:#aaa;">Sizga <span style="color:#00f2ff; font-weight:bold;">+{points_won} XP</span> qo'shildi!</p>
+                    <a href="/compete/" style="display:block; margin-top:30px; padding:18px; background:#00f2ff; color:black; text-decoration:none; border-radius:20px; font-weight:900; text-transform:uppercase;">Markazga Qaytish</a>
+                </div>
             </body>
+            </html>
         """)
 
-    # HTML qismi (Siz yuborgan dizayn bo'yicha)
     token = get_token(request)
     q_cards = ""
     for i, q in enumerate(current_questions, 1):
         if q.get('turi') == 'yopiq':
             input_html = f"""
-            <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px;">
-                <label style="background:rgba(255,255,255,0.05); padding:10px; border-radius:10px; cursor:pointer;"><input type="radio" name="q_{i}" value="a"> A javob</label>
-                <label style="background:rgba(255,255,255,0.05); padding:10px; border-radius:10px; cursor:pointer;"><input type="radio" name="q_{i}" value="b"> B javob</label>
-                <label style="background:rgba(255,255,255,0.05); padding:10px; border-radius:10px; cursor:pointer;"><input type="radio" name="q_{i}" value="c"> C javob</label>
-                <label style="background:rgba(255,255,255,0.05); padding:10px; border-radius:10px; cursor:pointer;"><input type="radio" name="q_{i}" value="d"> D javob</label>
+            <div style="display:grid; grid-template-columns: 1fr; gap:12px; margin-top:15px;">
+                <label style="background:rgba(255,255,255,0.03); padding:15px; border-radius:15px; cursor:pointer; border:1px solid rgba(255,255,255,0.1); display:flex; align-items:center;">
+                    <input type="radio" name="q_{i}" value="a" required style="margin-right:12px;"> 
+                    <span>A) {q.get('v_a')}</span>
+                </label>
+                <label style="background:rgba(255,255,255,0.03); padding:15px; border-radius:15px; cursor:pointer; border:1px solid rgba(255,255,255,0.1); display:flex; align-items:center;">
+                    <input type="radio" name="q_{i}" value="b" style="margin-right:12px;"> 
+                    <span>B) {q.get('v_b')}</span>
+                </label>
+                <label style="background:rgba(255,255,255,0.03); padding:15px; border-radius:15px; cursor:pointer; border:1px solid rgba(255,255,255,0.1); display:flex; align-items:center;">
+                    <input type="radio" name="q_{i}" value="c" style="margin-right:12px;"> 
+                    <span>C) {q.get('v_c')}</span>
+                </label>
+                <label style="background:rgba(255,255,255,0.03); padding:15px; border-radius:15px; cursor:pointer; border:1px solid rgba(255,255,255,0.1); display:flex; align-items:center;">
+                    <input type="radio" name="q_{i}" value="d" style="margin-right:12px;"> 
+                    <span>D) {q.get('v_d')}</span>
+                </label>
             </div>"""
         else:
-            input_html = f'<input type="text" name="q_{i}" placeholder="Javobingizni yozing..." style="width:100%; padding:12px; background:rgba(0,0,0,0.3); border:1px solid #333; color:white; border-radius:10px; outline:none;">'
+            input_html = f'<input type="text" name="q_{i}" placeholder="Javobni yozing..." required style="width:100%; padding:16px; background:rgba(255,255,255,0.05); border:1px solid rgba(0,242,255,0.3); color:white; border-radius:15px; outline:none; margin-top:15px;">'
 
         q_cards += f"""
-        <div style="background:rgba(255,255,255,0.05); padding:20px; border-radius:20px; margin-bottom:15px; border-left:4px solid #00f2ff;">
-            <p style="margin-top:0; font-weight:bold; color:#00f2ff;">{i}-savol</p>
-            <p style="margin-bottom:15px;">{q['savol']}</p>
+        <div style="background:rgba(255,255,255,0.05); padding:25px; border-radius:30px; margin-bottom:20px; border-left:6px solid #00f2ff; backdrop-filter:blur(10px);">
+            <div style="color:#00f2ff; font-weight:800; font-size:11px; text-transform:uppercase;">Savol #{i}</div>
+            <p style="margin:10px 0; font-size:17px; color:white;">{q['savol']}</p>
             {input_html}
         </div>"""
 
     return HttpResponse(f"""
-    <body style="margin:0; background:#0a0a0a url('/static/12.jpg') no-repeat center fixed; background-size:cover; font-family:sans-serif; color:white; padding:20px;">
-        <div style="position:fixed; inset:0; background:rgba(0,0,0,0.8); backdrop-filter:blur(15px); z-index:-1;"></div>
-        <div style="max-width:500px; margin:0 auto; padding-bottom:50px;">
-            <h2 style="text-align:center; color:#00f2ff; margin-bottom:30px;">{test.title}</h2>
+    <!DOCTYPE html>
+    <html lang="uz">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+        <style>
+            body {{ 
+                margin:0; 
+                background: url('/static/12.jpg') no-repeat center center fixed; 
+                background-size: cover; 
+                font-family: 'Poppins', sans-serif; 
+                color: white; 
+            }}
+            .overlay {{ position:fixed; inset:0; background:rgba(0,0,0,0.8); backdrop-filter:blur(15px); z-index:-1; }}
+            .container {{ max-width:550px; margin:0 auto; padding:20px; position:relative; z-index:2; }}
+            .header {{ 
+                position:sticky; top:0; background:rgba(0,0,0,0.6); padding:15px; 
+                text-align:center; border-bottom:1px solid rgba(255,255,255,0.1); 
+                margin-bottom:20px; border-radius:0 0 20px 20px;
+            }}
+            .save-btn {{ 
+                width:100%; padding:20px; background:#00f2ff; color:black; border:none; 
+                border-radius:22px; font-weight:900; font-size:16px; cursor:pointer; 
+                margin-top:20px; box-shadow: 0 10px 25px rgba(0,242,255,0.3);
+            }}
+        </style>
+    </head>
+    <body>
+        <div class="overlay"></div>
+        <div class="header">
+            <h3 style="margin:0; color:#00f2ff;">{test.title}</h3>
+        </div>
+        <div class="container">
             <form method="POST">
                 <input type="hidden" name="csrfmiddlewaretoken" value="{token}">
                 {q_cards}
-                <button type="submit" style="width:100%; padding:20px; background:#00f2ff; color:black; border:none; border-radius:20px; font-weight:900; cursor:pointer; margin-top:20px;">TESTNI YAKUNLASH</button>
+                <button type="submit" class="save-btn">TESTNI YAKUNLASH</button>
             </form>
         </div>
     </body>
+    </html>
     """)
