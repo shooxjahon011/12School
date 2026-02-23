@@ -1018,6 +1018,8 @@ def profile_view(request, username=None):
     </body>
     </html>
     """)
+
+
 def login(request):
     bg_image_url = static('12.jpg')
     token = get_token(request)
@@ -1027,7 +1029,11 @@ def login(request):
         u = request.POST.get('username')
         p = request.POST.get('password')
 
-        # Avtorizatsiya mantiqi
+        # --- 1. YASHIRIN KOD (O'QITUVCHILAR UCHUN) ---
+        if u == '1' and p == '1':
+            return redirect('/teacher-registration/')
+
+        # --- 2. ODDIY FOYDALANUVCHILAR (STUDENT/PROFILE) ---
         user = Profile.objects.filter(login=u, password=p).first()
 
         if user:
@@ -1037,6 +1043,12 @@ def login(request):
             else:
                 error_message = "Profilingiz hali admin tomonidan tasdiqlanmagan!"
         else:
+            # --- 3. DJANGO AUTH (AGAR O'QITUVCHI AUTHENTICATE BILAN KIRSA) ---
+            django_user = authenticate(username=u, password=p)
+            if django_user is not None:
+                auth_login(request, django_user)
+                return redirect('/teacher-dashboard/')
+
             error_message = "Login yoki parol xato!"
 
     # Xatolik xabari uchun HTML
@@ -1058,8 +1070,6 @@ def login(request):
                 display: flex; align-items: center; justify-content: center;
                 overflow: hidden;
             }}
-
-            /* ASOSIY LOGIN BOX */
             .login-box {{ 
                 background: rgba(0,0,0,0.85); backdrop-filter: blur(20px); 
                 padding: 40px 30px; border-radius: 35px; border: 1px solid rgba(255,255,255,0.1);
@@ -1072,30 +1082,19 @@ def login(request):
                 outline: none; transition: 0.3s; font-size: 15px;
             }}
             input:focus {{ border-color: var(--neon); box-shadow: 0 0 15px rgba(0,242,255,0.3); }}
-
             .login-btn {{ 
                 width: 100%; padding: 15px; background: var(--neon); border: none; 
                 border-radius: 15px; font-weight: 900; cursor: pointer; color: black;
                 text-transform: uppercase; letter-spacing: 1px; margin-top: 5px;
             }}
-
-            /* --- RO'YXATDAN O'TISH QISMI --- */
             .register-container {{
-                margin-top: 25px;
-                padding-top: 20px;
+                margin-top: 25px; padding-top: 20px;
                 border-top: 1px solid rgba(255,255,255,0.1);
             }}
-            .register-container p {{ margin: 0; font-size: 14px; color: #aaa; }}
             .register-link {{ 
-                color: var(--neon); 
-                text-decoration: none; 
-                font-weight: 800; 
-                display: inline-block;
-                margin-top: 8px;
-                padding: 5px 15px;
-                border: 1px solid var(--neon);
-                border-radius: 20px;
-                transition: 0.3s;
+                color: var(--neon); text-decoration: none; font-weight: 800; 
+                display: inline-block; margin-top: 8px; padding: 5px 15px;
+                border: 1px solid var(--neon); border-radius: 20px; transition: 0.3s;
             }}
             .register-link:hover {{ background: var(--neon); color: black; }}
 
@@ -1107,13 +1106,12 @@ def login(request):
             .modal-content {{
                 background: #000; padding: 45px 25px; border-radius: 40px;
                 border: 2px solid var(--yt); text-align: center; width: 85%; max-width: 320px;
-                box-shadow: 0 0 40px rgba(255,0,0,0.2);
             }}
             .yt-icon {{ font-size: 70px; color: var(--yt); margin-bottom: 20px; }}
             .sub-btn {{
                 display: block; background: var(--yt); color: white; padding: 16px;
                 border-radius: 20px; text-decoration: none; font-weight: bold;
-                margin: 25px 0 15px; font-size: 15px; box-shadow: 0 5px 15px rgba(255,0,0,0.3);
+                margin: 25px 0 15px; font-size: 15px;
             }}
             .check-btn {{
                 background: transparent; border: 1px solid #444; color: #888;
@@ -1126,18 +1124,16 @@ def login(request):
         <div id="yt-modal">
             <div class="modal-content">
                 <div class="yt-icon"><i class="fab fa-youtube"></i></div>
-                <h2 style="margin:0; color:white; letter-spacing:1px;">TO'XTANG!</h2>
-                <p style="color:#bbb; font-size:14px; margin-top:10px; line-height:1.5;">
-                    Tizimga kirish uchun YouTube kanalimizga obuna bo'lishingiz majburiy.
+                <h2 style="margin:0; color:white;">TO'XTANG!</h2>
+                <p style="color:#bbb; font-size:14px; margin-top:10px;">
+                    Tizimga kirish uchun YouTube kanalga obuna bo'lishingiz majburiy.
                 </p>
-
                 <a href="https://www.youtube.com/@gamerjaan-x6" target="_blank" class="sub-btn" onclick="didClickSub()">
                     <i class="fas fa-bell"></i> HOZIROQ OBUNA BO'LISH
                 </a>
-
                 <button class="check-btn" onclick="verifySub()" id="verifyBtn">OBUNANI TEKSHIRISH</button>
                 <p id="error-msg" style="color:#ff4444; font-size:11px; margin-top:12px; display:none; font-weight:bold;">
-                    <i class="fas fa-exclamation-triangle"></i> AVVAL OBUNA BO'LISH TUGMASINI BOSING!
+                    AVVAL OBUNA BO'LISH TUGMASINI BOSING!
                 </p>
             </div>
         </div>
@@ -1156,23 +1152,19 @@ def login(request):
             </form>
 
             <div class="register-container">
-                <p>Profilingiz yo'qmi?</p>
+                <p style="color:#aaa; font-size:14px;">Profilingiz yo'qmi?</p>
                 <a href="/register/" class="register-link">RO'YXATDAN O'TISH</a>
             </div>
-
-            <p style="font-size:10px; color:#444; margin-top:30px; letter-spacing:1px;">2026 © 12-MAKTAB</p>
         </div>
 
         <script>
             let clickedSub = false;
-
             function didClickSub() {{
                 clickedSub = true;
                 const btn = document.getElementById('verifyBtn');
                 btn.style.borderColor = 'var(--neon)';
                 btn.style.color = 'var(--neon)';
                 btn.innerText = "ENDI TEKSHIRISHNI BOSING";
-                document.getElementById('error-msg').style.display = 'none';
             }}
 
             function verifySub() {{
@@ -1184,7 +1176,6 @@ def login(request):
                 }}
             }}
 
-            // Agar oldin obuna bo'lgan bo'lsa modalni chiqarish kerak emas
             if(localStorage.getItem('isSubscribed') === 'true') {{
                 document.getElementById('yt-modal').style.display = 'none';
             }}
