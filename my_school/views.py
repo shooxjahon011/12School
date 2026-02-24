@@ -5,6 +5,7 @@ from django.http import HttpResponse
 from django.templatetags.static import static
 from django.middleware.csrf import get_token
 import json
+import html
 from django.http import JsonResponse
 from django.contrib import messages
 from django.views.decorators.csrf import csrf_exempt
@@ -222,43 +223,6 @@ def comment_post(request, post_id):
         'comments': comments_list,
         'count': post.comments.count()
     })
-def place_order(request, book_id):
-    # 1. Foydalanuvchi tizimga kirganini tekshirish
-    user_login = request.session.get('user_login')
-    if not user_login:
-        return redirect('/')
-
-    # 2. Foydalanuvchi va Kitobni bazadan olish
-    user = Profile.objects.filter(login=user_login).first()
-    book = get_object_or_404(Book, id=book_id)
-
-    # 3. Kitob zaxirasini tekshirish
-    if book.count > 0:
-        # Buyurtma yaratish (modelda 'student' emas 'user' deb o'zgartirganmiz)
-        Order.objects.create(
-            user=user,
-            book=book,
-            is_returned=False
-        )
-
-        # Kitob sonini bittaga kamaytirish
-        book.count -= 1
-        book.save()
-
-        return HttpResponse("""
-            <script>
-                alert('Muvaffaqiyatli: Buyurtmangiz qabul qilindi. Kutubxonaga borib kitobni olishingiz mumkin!'); 
-                window.location.href='/library/';
-            </script>
-        """)
-    else:
-        # Agar kitob qolmagan bo'lsa
-        return HttpResponse("""
-            <script>
-                alert('Xatolik: Afsuski, ushbu kitobdan hozircha qolmagan.'); 
-                window.location.href='/library/';
-            </script>
-        """)
 def return_book_view(request, order_id):
     # 1. Faqat kutubxonachi kira olishini tekshirish (ixtiyoriy lekin tavsiya etiladi)
     user_login = request.session.get('user_login')
@@ -285,96 +249,6 @@ def return_book_view(request, order_id):
 
     # 4. Ro'yxat sahifasiga qaytarish
     return redirect('/library/orders/')
-def book_orders_view(request):
-    # 1. Faqat kutubxonachi kira olishini tekshirish
-    if request.session.get('user_login') != "Kutubxona2026":
-        return redirect('/second/')
-
-    # 2. Qaytarilmagan buyurtmalarni olish
-    orders = Order.objects.filter(is_returned=False).order_by('-order_date')
-    order_list_html = ""
-
-    for o in orders:
-        # O'quvchining to'liq manzili
-        u = o.user
-        if u:
-            address = f"{u.mahalla} mfy, {u.kocha} ko'chasi, {u.uy}-uy"
-            full_name = u.full_name
-            class_info = f"{u.sinf}-{u.parallel}"
-            phone = u.phone if u.phone else u.parent_phone
-        else:
-            address = "Noma'lum"
-            full_name = "O'chirilgan foydalanuvchi"
-            class_info = "-"
-            phone = "-"
-
-        order_list_html += f"""
-        <div class="order-card">
-            <div class="order-header">
-                <i class="fas fa-book" style="color:#00f2ff;"></i>
-                <span style="font-weight:900; font-size:16px;">{o.book.title}</span>
-            </div>
-            <div class="order-body">
-                <p><i class="fas fa-user"></i> <b>O'quvchi:</b> {full_name} ({class_info})</p>
-                <p><i class="fas fa-phone"></i> <b>Tel:</b> {phone}</p>
-                <p><i class="fas fa-map-marker-alt"></i> <b>Manzil:</b> {address}</p>
-                <p><i class="fas fa-calendar-alt"></i> <b>Sana:</b> {o.order_date.strftime('%d.%m.%Y | %H:%M')}</p>
-            </div>
-            <a href="/library/return/{o.id}/" class="btn-return">KUTUBXONAGA QAYTARDI</a>
-        </div>
-        """
-
-    bg_image_url = static('12.jpg')
-
-    html = f"""
-    <!DOCTYPE html>
-    <html lang="uz">
-    <head>
-        <meta charset="UTF-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>Buyurtmalar Nazorati</title>
-        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
-        <style>
-            body {{ 
-                background: url('{bg_image_url}') no-repeat center center fixed; 
-                background-size: cover; font-family: 'Segoe UI', sans-serif; 
-                margin: 0; padding: 20px; color: #fff; 
-            }}
-            .overlay {{ position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.85); z-index: -1; }}
-            .container {{ max-width: 500px; margin: 0 auto; }}
-
-            h2 {{ color: #00f2ff; text-align: center; text-transform: uppercase; letter-spacing: 2px; margin-bottom: 30px; }}
-
-            .order-card {{ 
-                background: rgba(255,255,255,0.05); backdrop-filter: blur(15px); 
-                border-radius: 20px; padding: 20px; margin-bottom: 20px; 
-                border: 1px solid rgba(0,242,255,0.2); box-shadow: 0 10px 30px rgba(0,0,0,0.5);
-            }}
-            .order-header {{ border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 10px; margin-bottom: 15px; }}
-            .order-body p {{ margin: 8px 0; font-size: 14px; color: #ddd; }}
-            .order-body i {{ width: 20px; color: #00f2ff; margin-right: 5px; }}
-
-            .btn-return {{ 
-                display: block; background: #00f2ff; color: #000; text-align: center; 
-                padding: 12px; border-radius: 12px; text-decoration: none; 
-                font-weight: 900; margin-top: 15px; transition: 0.3s;
-            }}
-            .btn-return:hover {{ background: #fff; transform: scale(1.02); }}
-            .back-link {{ color: #fff; text-decoration: none; font-weight: bold; font-size: 14px; }}
-        </style>
-    </head>
-    <body>
-        <div class="overlay"></div>
-        <div class="container">
-            <a href="/second/" class="back-link"><i class="fas fa-arrow-left"></i> ASOSIY MENYU</a>
-            <h2><i class="fas fa-clipboard-list"></i> Buyurtmalar</h2>
-
-            {order_list_html if order_list_html else "<p style='text-align:center; opacity:0.5;'>Hozircha faol buyurtmalar yo'q.</p>"}
-        </div>
-    </body>
-    </html>
-    """
-    return HttpResponse(html)
 @csrf_exempt
 def add_book_view(request):
     # 1. Faqat kutubxonachi kira olishini tekshirish
@@ -542,16 +416,19 @@ def library_view(request):
         return redirect('/')
 
     query = request.GET.get('q', '')
-    # Faqat soni 0 dan ko'p kitoblar chiqadi
+
+    # Qidiruv mantiqi: Nomi, Muallifi yoki Janri bo'yicha
     books = Book.objects.filter(
-        (Q(title__icontains=query) | Q(author__icontains=query)),
+        (Q(title__icontains=query) | Q(author__icontains=query) | Q(genre__icontains=query)),
         count__gt=0
     ).order_by('-id')
 
     book_cards = ""
     for b in books:
+        safe_title = b.title.replace("'", "\\'")
+        safe_author = b.author.replace("'", "\\'")
         book_cards += f"""
-        <div class="book-card" onclick="openOrderModal('{b.title}', '{b.author}', '{b.image_url}', '{b.id}')">
+        <div class="book-card" onclick="openOrderModal('{safe_title}', '{safe_author}', '{b.image_url}', '{b.id}')">
             <div class="badge">Yangi</div>
             <img src="{b.image_url}" onerror="this.src='https://via.placeholder.com/150x220?text=Muqova+yoq'" class="book-img">
             <div class="book-info">
@@ -559,21 +436,21 @@ def library_view(request):
                 <p>{b.author}</p>
                 <div class="book-footer">
                     <span><i class="fas fa-layer-group"></i> {b.count} ta</span>
-                    <span class="genre-tag">{b.genre}</span>
+                    <span class="genre-tag">{b.genre if b.genre else 'Roman'}</span>
                 </div>
             </div>
         </div>
         """
 
-    bg_image_url = static('12.jpg')  # Fon rasmi
+    bg_image_url = static('12.jpg')
 
-    html = f"""
+    return HttpResponse(f"""
     <!DOCTYPE html>
     <html lang="uz">
     <head>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>Kutubxona | Digital School</title>
+        <title>Maktab Kutubxonasi</title>
         <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
         <style>
             :root {{ --neon: #00f2ff; --glass: rgba(255, 255, 255, 0.1); }}
@@ -582,101 +459,122 @@ def library_view(request):
                 background-size: cover; font-family: 'Segoe UI', sans-serif; 
                 margin: 0; padding: 20px; color: #fff; 
             }}
-            .overlay {{ position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); z-index: -1; }}
+            .overlay {{ position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.85); z-index: -1; }}
 
-            .header-nav {{ display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }}
-            .back-btn {{ color: var(--neon); text-decoration: none; font-weight: bold; font-size: 14px; }}
-
-            .search-box {{ 
-                position: relative; margin-bottom: 30px; 
+            /* QIDIRUV KONTEYNERI */
+            .search-wrapper {{
+                max-width: 600px;
+                margin: 20px auto 40px auto;
+                display: flex;
+                gap: 10px;
+                align-items: center;
             }}
-            .search-bar {{ 
-                width: 100%; padding: 15px 20px 15px 50px; border-radius: 20px; 
-                border: 1px solid rgba(0,242,255,0.3); background: var(--glass); 
-                backdrop-filter: blur(10px); color: #fff; outline: none; box-sizing: border-box;
-                font-size: 16px; transition: 0.3s;
-            }}
-            .search-bar:focus {{ border-color: var(--neon); box-shadow: 0 0 15px rgba(0,242,255,0.2); }}
-            .search-box i {{ position: absolute; left: 20px; top: 18px; color: var(--neon); }}
-
-            .grid {{ 
-                display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); 
-                gap: 20px; padding-bottom: 40px;
-            }}
-            .book-card {{ 
-                background: var(--glass); backdrop-filter: blur(15px); 
-                border-radius: 20px; overflow: hidden; cursor: pointer; 
-                transition: 0.3s; border: 1px solid rgba(255,255,255,0.1);
+            .search-box {{
                 position: relative;
+                flex: 1;
             }}
-            .book-card:hover {{ transform: translateY(-10px); border-color: var(--neon); }}
-            .badge {{ 
-                position: absolute; top: 10px; right: 10px; background: var(--neon); 
-                color: #000; font-size: 10px; font-weight: 900; padding: 3px 8px; 
-                border-radius: 5px; z-index: 1;
+            .search-box i {{
+                position: absolute;
+                left: 15px;
+                top: 50%;
+                transform: translateY(-50%);
+                color: var(--neon);
+                font-size: 18px;
             }}
-            .book-img {{ width: 100%; height: 220px; object-fit: cover; border-bottom: 1px solid rgba(255,255,255,0.1); }}
+            .search-input {{
+                width: 100%;
+                padding: 15px 15px 15px 45px;
+                border-radius: 15px;
+                border: 1px solid rgba(0,242,255,0.3);
+                background: rgba(0,0,0,0.6);
+                backdrop-filter: blur(10px);
+                color: white;
+                font-size: 16px;
+                outline: none;
+                box-sizing: border-box;
+                transition: 0.3s;
+            }}
+            .search-input:focus {{
+                border-color: var(--neon);
+                box-shadow: 0 0 15px rgba(0,242,255,0.2);
+            }}
+
+            /* IZLASH TUGMASI */
+            .search-btn {{
+                background: var(--neon);
+                color: #000;
+                border: none;
+                padding: 15px 25px;
+                border-radius: 15px;
+                font-weight: 900;
+                cursor: pointer;
+                text-transform: uppercase;
+                letter-spacing: 1px;
+                transition: 0.3s;
+                white-space: nowrap;
+                display: flex;
+                align-items: center;
+                gap: 8px;
+            }}
+            .search-btn:hover {{
+                box-shadow: 0 0 20px var(--neon);
+                transform: translateY(-2px);
+            }}
+
+            /* GRID VA CARDLAR */
+            .grid {{ display: grid; grid-template-columns: repeat(auto-fill, minmax(165px, 1fr)); gap: 20px; }}
+            .book-card {{ 
+                background: var(--glass); backdrop-filter: blur(15px); border-radius: 20px; 
+                overflow: hidden; cursor: pointer; border: 1px solid rgba(255,255,255,0.1); 
+                transition: 0.3s; position: relative; 
+            }}
+            .book-card:hover {{ transform: translateY(-10px); border-color: var(--neon); box-shadow: 0 10px 30px rgba(0,0,0,0.5); }}
+            .book-img {{ width: 100%; height: 230px; object-fit: cover; }}
             .book-info {{ padding: 12px; }}
             .book-info h4 {{ margin: 0; color: var(--neon); font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }}
-            .book-info p {{ margin: 5px 0; color: #ccc; font-size: 12px; }}
+            .genre-tag {{ background: rgba(0,242,255,0.2); color: var(--neon); padding: 2px 8px; border-radius: 6px; font-size: 11px; }}
 
-            .book-footer {{ display: flex; justify-content: space-between; align-items: center; margin-top: 10px; }}
-            .book-footer span {{ font-size: 11px; font-weight: bold; color: #ffd700; }}
-            .genre-tag {{ background: rgba(0,242,255,0.1); color: var(--neon) !important; padding: 2px 6px; border-radius: 4px; }}
-
-            /* MODAL STYLES */
-            #modalBackdrop {{ 
-                display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; 
-                background: rgba(0,0,0,0.9); backdrop-filter: blur(10px); z-index: 10000; 
-                justify-content: center; align-items: center; padding: 20px;
-            }}
-            .modal-box {{ 
-                background: rgba(20,20,20,0.95); padding: 30px; border-radius: 30px; 
-                width: 100%; max-width: 350px; text-align: center; 
-                border: 1.5px solid var(--neon); box-shadow: 0 0 50px rgba(0,242,255,0.2);
-            }}
-            .order-confirm-btn {{ 
-                display: block; background: var(--neon); color: #000; padding: 15px; 
-                border-radius: 15px; text-decoration: none; font-weight: 900; 
-                margin-top: 25px; text-transform: uppercase; transition: 0.3s;
-            }}
-            .order-confirm-btn:hover {{ background: #fff; transform: scale(1.02); }}
-            .cancel-btn {{ background: none; border: none; color: #ff4444; margin-top: 15px; font-weight: bold; cursor: pointer; }}
+            /* MODAL */
+            #modalBackdrop {{ display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.9); z-index: 9999; justify-content: center; align-items: center; }}
+            .modal-box {{ background: #141414; padding: 30px; border-radius: 30px; width: 90%; max-width: 350px; text-align: center; border: 1px solid var(--neon); }}
+            .order-confirm-btn {{ display: block; background: var(--neon); color: #000; padding: 15px; border-radius: 15px; text-decoration: none; font-weight: bold; margin-top: 20px; }}
         </style>
     </head>
     <body>
         <div class="overlay"></div>
 
-        <div class="header-nav">
-            <a href="/second/" class="back-btn"><i class="fas fa-chevron-left"></i> ORQAGA</a>
-            <i class="fas fa-book-reader" style="font-size: 24px; color: var(--neon);"></i>
+        <div style="display: flex; justify-content: space-between; align-items: center; padding: 10px 0;">
+             <a href="/second/" style="color: var(--neon); text-decoration: none; font-weight: bold;"><i class="fas fa-chevron-left"></i> ORQAGA</a>
+             <h2 style="text-transform:uppercase; margin: 0; letter-spacing: 2px; font-weight: 900;">Maktab Kutubxonasi</h2>
+             <div style="width: 80px;"></div>
         </div>
 
-        <h2 style="text-align:center; font-weight:900; letter-spacing:1px; text-transform:uppercase;">Maktab Kutubxonasi</h2>
-
-        <div class="search-box">
-            <form method="GET">
-                <i class="fas fa-search"></i>
-                <input type="text" name="q" class="search-bar" placeholder="Kitob nomi yoki muallif..." value="{query}">
-            </form>
-        </div>
+        <form method="GET">
+            <div class="search-wrapper">
+                <div class="search-box">
+                    <i class="fas fa-search"></i>
+                    <input type="text" name="q" class="search-input" placeholder="Kitob, muallif yoki janr..." value="{query}">
+                </div>
+                <button type="submit" class="search-btn">
+                    <i class="fas fa-filter"></i> IZLASH
+                </button>
+            </div>
+        </form>
 
         <div class="grid">
-            {book_cards if book_cards else "<p style='grid-column: 1/-1; text-align:center; opacity:0.5;'>Kitoblar topilmadi.</p>"}
+            {book_cards if book_cards else "<p style='grid-column: 1/-1; text-align:center; padding: 50px; opacity:0.5;'>Hech qanday kitob topilmadi...</p>"}
         </div>
 
         <div id="modalBackdrop">
             <div class="modal-box">
-                <img id="mImg" src="" style="width:120px; height:170px; border-radius:15px; object-fit:cover; margin-bottom:15px; box-shadow: 0 10px 20px rgba(0,0,0,0.5);">
-                <h3 id="mTitle" style="color:var(--neon); margin:0 0 5px 0;"></h3>
-                <p id="mAuthor" style="color:#aaa; font-size:14px; margin:0;"></p>
-
-                <div style="margin-top:20px; font-size:13px; color:#eee; border-top:1px solid rgba(255,255,255,0.1); padding-top:15px; line-height:1.6;">
-                    Ushbu kitobni 7 kunga ijaraga olishni <br><b>tasdiqlaysizmi?</b>
+                <img id="mImg" src="" style="width:140px; height:200px; border-radius:15px; object-fit:cover; margin-bottom:15px; box-shadow: 0 10px 20px rgba(0,0,0,0.5);">
+                <h3 id="mTitle" style="color:var(--neon); margin:0; font-size: 20px;"></h3>
+                <p id="mAuthor" style="color:#aaa; margin-top: 5px;"></p>
+                <div style="margin: 20px 0; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 15px;">
+                    <p style="font-size: 14px;">Ushbu kitobni <b>7 kunga</b> ijaraga olasizmi?</p>
                 </div>
-
                 <a id="mLink" href="" class="order-confirm-btn">TASDIQLASH</a>
-                <button onclick="closeModal()" class="cancel-btn">BEKOR QILISH</button>
+                <button onclick="closeModal()" style="background:none; border:none; color:#ff4444; margin-top:15px; cursor:pointer; font-weight:bold;">BEKOR QILISH</button>
             </div>
         </div>
 
@@ -688,20 +586,18 @@ def library_view(request):
                 document.getElementById('mLink').href = "/library/order/" + id + "/";
                 document.getElementById('modalBackdrop').style.display = 'flex';
             }}
+            function closeModal() {{ document.getElementById('modalBackdrop').style.display = 'none'; }}
 
-            function closeModal() {{
-                document.getElementById('modalBackdrop').style.display = 'none';
-            }}
-
+            // Modal tashqarisiga bosilganda yopish
             window.onclick = function(event) {{
-                let modal = document.getElementById('modalBackdrop');
-                if (event.target == modal) {{ closeModal(); }}
+                if (event.target == document.getElementById('modalBackdrop')) {{ closeModal(); }}
             }}
         </script>
     </body>
     </html>
-    """
-    return HttpResponse(html)
+    """)
+
+
 def second_view(request):
     user_login = request.session.get('user_login')
     if not user_login:
@@ -711,7 +607,10 @@ def second_view(request):
     if not user:
         return redirect('/')
 
-    is_librarian = (user_login == "Kutubxona2026")
+    # Xatolikni oldini olish uchun xavfsiz tekshiruv (lavozim maydoni bo'lmasa ham ishlaydi)
+    user_role = getattr(user, 'lavozim', '')
+    is_librarian = (user_role == "Kutubxonachi")
+
     bg_image_url = static('12.jpg')
 
     try:
@@ -721,60 +620,54 @@ def second_view(request):
 
     display_name = user.full_name if user.full_name else user.login
 
-    # 1. ACTION BUTTONS (Tugmalar qismi)
+    # 1. ACTION BUTTONS (+ tugmasi kichraytirildi)
     if is_librarian:
         new_orders = Order.objects.filter(is_returned=False).count()
         action_btns_html = f"""
         <div class="action-btns">
             <a href="/library/orders/" class="mini-btn" style="background:#ffd700; color:#000;">
-                <i class="fas fa-bell"></i> {new_orders} yangi
+                <i class="fas fa-bell"></i> {new_orders}
             </a>
-            <a href="/post-view/" class="mini-btn plus-btn"><i class="fas fa-plus"></i></a>
+            <a href="/post-view/" class="plus-btn"><i class="fas fa-plus"></i></a>
         </div>"""
     else:
-        # ODDIY FOYDALANUVCHILAR UCHUN VIDEO YUKLASH TUGMASI (+)
         action_btns_html = f"""
         <div class="action-btns">
-            <a href="/upload-video/" class="mini-btn plus-btn" style="background: var(--accent); color: #000; width: 40px; height: 40px; font-size: 18px;">
-                <i class="fas fa-plus"></i>
-            </a>
+            <a href="/upload-video/" class="plus-btn"><i class="fas fa-plus"></i></a>
         </div>"""
 
-    # 2. MAIN MENU CONTENT (Asosiy menyu)
+    # 2. MAIN MENU CONTENT
     if is_librarian:
         menu_content = f"""
         <div class="grid-2" style="grid-template-columns: 1fr;">
-            <a href="/library/add/" class="glass-card" style="border: 2px solid #ffd700; padding: 40px 20px;">
-                <i class="fas fa-plus-circle" style="color: #ffd700; font-size: 50px;"></i>
-                <span style="font-size: 18px; font-weight: 900; margin-top: 15px; color: #ffd700;">YANGI KITOB QO'SHISH</span>
+            <a href="/library/add/" class="glass-card" style="border: 2px solid #ffd700; background: rgba(0,0,0,0.4);">
+                <i class="fas fa-plus-circle" style="color: #ffd700; font-size: 30px;"></i>
+                <span style="color: #ffd700; font-size: 14px;">YANGI KITOB QO'SHISH</span>
             </a>
-            <div class="grid-2" style="margin-top:15px; width:100%;">
+            <div class="grid-2" style="margin-top:10px;">
                 <a href="/library/orders/" class="glass-card"><i class="fas fa-clipboard-list"></i><span>Buyurtmalar</span></a>
-                <a href="/library/" class="glass-card"><i class="fas fa-book"></i><span>Kitoblar bazasi</span></a>
+                <a href="/library/" class="glass-card"><i class="fas fa-book"></i><span>Kitoblar</span></a>
             </div>
         </div>"""
     else:
         menu_content = f"""
         <div class="grid-2">
-            <a href="/student-schedule/" class="glass-card" style="border: 1px solid var(--accent); background: rgba(0,242,255,0.1);">
+            <a href="/student-schedule/" class="glass-card" style="border: 1px solid var(--accent);">
                 <i class="fas fa-calendar-alt"></i>
                 <span>Dars jadvalim</span>
-                <small style="font-size: 9px; opacity: 0.7;">{user.sinf}-{user.parallel} sinfi</small>
             </a>
             <a href="/subjects/" class="glass-card"><i class="fas fa-tasks"></i><span>Vazifalar</span></a>
             <a href="/chat/" class="glass-card"><i class="fas fa-comment-dots"></i><span>Sinf Chat</span></a>
             <a href="/library/" class="glass-card"><i class="fas fa-book-reader"></i><span>Kutubxona</span></a>
             <a href="/compete/" class="glass-card"><i class="fas fa-trophy"></i><span>Testlar</span></a>
-            <a href="/projects/" class="glass-card"><i class="fas fa-project-diagram"></i><span>Loyiha topshirish</span></a>
-
-            <a href="https://kahoot.com/" class="glass-card" style="grid-column: span 2; background: rgba(70, 23, 143, 0.2); border: 1.5px solid #46178f;">
+            <a href="/projects/" class="glass-card"><i class="fas fa-project-diagram"></i><span>Loyihalar</span></a>
+            <a href="https://kahoot.com/" class="glass-card" style="grid-column: span 2; background: rgba(70, 23, 143, 0.4); border: 1.5px solid #46178f;">
                 <i class="fas fa-gamepad" style="color: #fff;"></i>
-                <span style="font-size: 15px; font-weight: 800; letter-spacing: 1px;">Kahoot</span>
+                <span>Kahoot</span>
             </a>
         </div>"""
 
-    # 3. FULL HTML STRUCTURE
-    full_html = f"""
+    return HttpResponse(f"""
 <!DOCTYPE html>
 <html lang="uz">
 <head>
@@ -783,63 +676,106 @@ def second_view(request):
     <title>12-Maktab | Dashboard</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <style>
-        :root {{ --accent: #00f2ff; --glass: rgba(255, 255, 255, 0.08); --blur: blur(20px); }}
+        :root {{ --accent: #00f2ff; --glass: rgba(0, 0, 0, 0.6); }}
+
         body {{ 
             margin: 0; background: url('{bg_image_url}') no-repeat center center fixed; 
             background-size: cover; color: #fff; font-family: 'Segoe UI', sans-serif;
-            overflow-x: hidden;
+            min-height: 100vh; display: flex; flex-direction: column;
+            backdrop-filter: brightness(1.2); /* Orqa fonni yoritish */
         }}
-        .overlay {{ position: fixed; inset: 0; background: rgba(0, 0, 0, 0.82); z-index: -1; }}
-        .top-bar {{ display: flex; flex-direction: column; align-items: flex-end; padding: 20px 5%; position: relative; }}
-        .google-logo {{ position: absolute; left: 5%; top: 25px; font-size: 22px; font-weight: 900; letter-spacing: -1px; }}
-        .g-blue {{ color: #4285F4; }} .g-red {{ color: #EA4335; }} .g-yellow {{ color: #FBBC05; }} .g-green {{ color: #34A853; }}
+
+        .overlay {{ position: fixed; inset: 0; background: rgba(0, 0, 0, 0.25); z-index: -1; }}
+
+        /* TOP BAR */
+        .top-bar {{ 
+            display: flex; justify-content: space-between; align-items: center; 
+            padding: 20px 5% 10px 5%; 
+        }}
+
+        /* YANGI LOGOTIP: Gradient va o'ngga engashgan */
+        .google-logo {{ 
+            font-size: 26px; 
+            font-weight: 900; 
+            font-style: italic; 
+            transform: skewX(-8deg); /* O'ngga engashtirish */
+            letter-spacing: -1px;
+            display: flex;
+            align-items: center;
+        }}
+        .logo-text {{
+            background: linear-gradient(to right, #00f2ff, #0077ff);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            text-shadow: 2px 2px 10px rgba(0, 242, 255, 0.3);
+        }}
+        .logo-dash {{ color: #ff0055; margin: 0 2px; text-shadow: none; -webkit-text-fill-color: initial; }}
+
+        .user-section {{ display: flex; flex-direction: column; align-items: flex-end; gap: 8px; }}
 
         .prof-pill {{ 
-            display: flex; align-items: center; gap: 10px; background: rgba(255,255,255,0.1); 
-            padding: 6px 15px; border-radius: 30px; border: 1px solid var(--accent); 
-            backdrop-filter: var(--blur); text-decoration: none; color: #fff; 
+            display: flex; align-items: center; gap: 8px; background: var(--glass); 
+            padding: 4px 12px; border-radius: 20px; border: 1px solid var(--accent); 
+            backdrop-filter: blur(10px); text-decoration: none; color: #fff; 
         }}
-        .prof-pill img {{ width: 32px; height: 32px; border-radius: 50%; object-fit: cover; border: 1.5px solid #fff; }}
+        .prof-pill img {{ width: 30px; height: 30px; border-radius: 50%; border: 1.5px solid var(--accent); }}
 
-        .action-btns {{ display: flex; gap: 10px; margin-top: 12px; }}
-        .mini-btn {{ background: var(--accent); color: #000; padding: 7px 15px; border-radius: 12px; font-size: 11px; font-weight: 800; text-decoration: none; transition: 0.3s; }}
-        .plus-btn {{ width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; padding: 0; box-shadow: 0 0 15px var(--accent); }}
+        /* + TUGMASI (Mobil uchun kichraytirildi) */
+        .action-btns {{ display: flex; align-items: center; gap: 8px; }}
+        .plus-btn {{ 
+            width: 28px; height: 28px; background: var(--accent); color: #000; 
+            border-radius: 50%; display: flex; align-items: center; justify-content: center; 
+            text-decoration: none; font-size: 14px; box-shadow: 0 0 12px var(--accent);
+            transition: 0.3s;
+        }}
         .plus-btn:active {{ transform: scale(0.9); }}
+        .mini-btn {{ padding: 4px 10px; border-radius: 10px; font-size: 10px; font-weight: bold; text-decoration: none; }}
 
-        .main-content {{ max-width: 500px; margin: 0 auto; padding: 10px 15px 120px; }}
-        .grid-2 {{ display: grid; grid-template-columns: 1fr 1fr; gap: 15px; }}
+        /* MAIN CONTENT */
+        .main-content {{ 
+            padding: 15px 15px 110px; /* Pastki menyu uchun joy */
+            max-width: 500px; margin: 0 auto; width: 92%; 
+        }}
+        .grid-2 {{ display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }}
+
         .glass-card {{ 
             background: var(--glass); border: 1px solid rgba(255,255,255,0.1); 
-            border-radius: 25px; padding: 22px 10px; text-align: center; 
+            border-radius: 22px; padding: 20px 5px; text-align: center; 
             text-decoration: none; color: #fff; display: flex; 
             flex-direction: column; align-items: center; gap: 10px; 
-            backdrop-filter: var(--blur); transition: 0.3s; 
+            backdrop-filter: blur(20px); transition: 0.2s; 
         }}
-        .glass-card:active {{ transform: scale(0.96); opacity: 0.8; }}
-        .glass-card i {{ font-size: 30px; color: var(--accent); }}
+        .glass-card:active {{ transform: scale(0.96); background: rgba(255,255,255,0.05); }}
+        .glass-card i {{ font-size: 26px; color: var(--accent); text-shadow: 0 0 10px var(--accent); }}
         .glass-card span {{ font-size: 13px; font-weight: 600; }}
 
+        /* BOTTOM NAV (EKRAN OSTIGA MAHKAMLANGAN) */
         .bottom-nav {{ 
-            position: fixed; bottom: 15px; left: 5%; width: 90%; height: 65px; 
-            background: rgba(255,255,255,0.1); backdrop-filter: blur(25px); 
+            position: fixed; bottom: 15px; left: 50%; transform: translateX(-50%);
+            width: 90%; max-width: 420px; height: 65px; 
+            background: rgba(0, 0, 0, 0.8); backdrop-filter: blur(25px); 
             display: flex; justify-content: space-around; align-items: center; 
             border-radius: 25px; border: 1px solid rgba(255,255,255,0.1); z-index: 1000;
         }}
-        .nav-item {{ display: flex; flex-direction: column; align-items: center; color: rgba(255,255,255,0.5); text-decoration: none; font-size: 10px; gap: 5px; }}
-        .active {{ color: var(--accent); }}
+        .nav-item {{ display: flex; flex-direction: column; align-items: center; color: #777; text-decoration: none; font-size: 10px; gap: 5px; }}
+        .nav-item.active {{ color: var(--accent); text-shadow: 0 0 8px var(--accent); }}
+        .nav-item i {{ font-size: 20px; }}
     </style>
 </head>
 <body>
     <div class="overlay"></div>
+
     <div class="top-bar">
         <div class="google-logo">
-            <span class="g-blue">1</span><span class="g-red">2</span><span class="g-yellow">-</span><span class="g-blue">M</span><span class="g-green">a</span><span class="g-red">k</span><span class="g-blue">t</span><span class="g-green">a</span><span class="g-yellow">b</span>
+            <span class="logo-text">12</span><span class="logo-dash">-</span><span class="logo-text">Maktab</span>
         </div>
-        <a href="/profile/" class="prof-pill">
-            <span style="font-size: 13px; font-weight: 700;">{display_name}</span>
-            <img src="{avatar_url}">
-        </a>
-        {action_btns_html}
+        <div class="user-section">
+            <a href="/profile/" class="prof-pill">
+                <span style="font-size: 11px; font-weight: 700;">{display_name[:12]}</span>
+                <img src="{avatar_url}">
+            </a>
+            {action_btns_html}
+        </div>
     </div>
 
     <div class="main-content">
@@ -853,9 +789,7 @@ def second_view(request):
         <a href="/profile/" class="nav-item"><i class="fas fa-user"></i><span>Profil</span></a>
     </nav>
 </body>
-</html>"""
-
-    return HttpResponse(full_html)
+</html>""")
 def profile_view(request, username=None):
     my_login = request.session.get('user_login')
     target_username = username if username else my_login
@@ -1018,8 +952,6 @@ def profile_view(request, username=None):
     </body>
     </html>
     """)
-
-
 def login(request):
     bg_image_url = static('12.jpg')
     token = get_token(request)
@@ -2430,7 +2362,7 @@ def teacher_dashboard(request):
         parts = teacher.class_leader.split('-')
         s_n, s_p = parts[0].strip(), parts[1].strip()
 
-    # 2. O'quvchilar ro'yxati va Davomat
+    # 2. O'quvchilar ro'yxati
     students = Profile.objects.filter(sinf=s_n, parallel=s_p).order_by('full_name')
     students_html = ""
     for i, std in enumerate(students, 1):
@@ -2449,25 +2381,21 @@ def teacher_dashboard(request):
             </div>
         </div>"""
 
-    # 3. Test Natijalari (Yangi qo'shilgan qism)
+    # 3. Test Natijalari
     my_tests = TeacherTest.objects.filter(teacher=request.user)
-    results = TestResult.objects.filter(test__in=my_tests).select_related('student', 'test').order_by('-date')[:10]
+    results = TestResult.objects.filter(test__in=my_tests).select_related('student', 'test').order_by('-date')[:5]
 
     results_rows = ""
     for res in results:
         results_rows += f"""
-        <div style="display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid rgba(255,255,255,0.05); font-size: 12px;">
+        <div style="display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid rgba(255,255,255,0.05); font-size: 11px;">
             <span style="color: #eee;">{res.student.full_name.split()[0]}</span>
-            <span style="color: #888;">{res.test.title[:15]}...</span>
             <span style="color: #00f2ff; font-weight: bold;">{res.score} ball</span>
         </div>"""
 
-    if not results:
-        results_rows = "<p style='text-align:center; color:#555; font-size:12px; padding:10px;'>Hali natijalar yo'q</p>"
-
-    # 4. Top O'quvchi va Statistika
+    # 4. Top O'quvchi
     top_std = students.order_by('-points').first()
-    top_html = f"<span>{top_std.full_name}</span> <b style='color:#00f2ff;'>{top_std.points} XP</b>" if top_std else "Ma'lumot yo'q"
+    top_html = f"<span>{top_std.full_name}</span> <b style='color:#00f2ff;'>{top_std.points} XP</b>" if top_std else "Yo'q"
 
     html = f"""
 <!DOCTYPE html>
@@ -2478,112 +2406,277 @@ def teacher_dashboard(request):
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <style>
         :root {{ --neon: #00f2ff; --red: #ff4d4d; --glass: rgba(255, 255, 255, 0.08); }}
-        body {{ 
-            margin: 0; 
-            background: #0a0a0a url('/static/12.jpg') no-repeat center fixed; 
-            background-size: cover; 
-            font-family: 'Segoe UI', Roboto, sans-serif; 
-            color: white; 
-            padding-bottom: 100px; 
-        }}
-        .overlay {{ position: fixed; inset: 0; background: rgba(0,0,0,0.72); backdrop-filter: blur(15px); z-index: -1; }}
+        body {{ margin: 0; background: #0a0a0a url('/static/12.jpg') no-repeat center fixed; background-size: cover; font-family: 'Segoe UI', sans-serif; color: white; padding-bottom: 100px; }}
+        .overlay {{ position: fixed; inset: 0; background: rgba(0,0,0,0.8); backdrop-filter: blur(15px); z-index: -1; }}
         .container {{ max-width: 450px; margin: 0 auto; padding: 20px; }}
-        .glass {{ background: var(--glass); backdrop-filter: blur(20px); border: 1px solid rgba(255,255,255,0.1); }}
-
+        .glass {{ background: var(--glass); backdrop-filter: blur(20px); border: 1px solid rgba(255,255,255,0.1); border-radius: 22px; }}
         .header {{ display: flex; justify-content: space-between; align-items: center; margin-bottom: 25px; }}
-        .user-chip {{ 
-            background: rgba(0,0,0,0.5); border: 1.5px solid var(--neon); padding: 4px 10px; 
-            border-radius: 20px; display: flex; align-items: center; gap: 8px; 
-            text-decoration: none; color: white; font-size: 12px; 
-        }}
-
-        .menu-grid {{ display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 25px; }}
-        .menu-btn {{ 
-            background: var(--glass); border-radius: 18px; padding: 15px; 
-            text-align: center; text-decoration: none; color: white; 
-            border: 1px solid rgba(255,255,255,0.05); transition: 0.3s;
-        }}
-        .menu-btn:active {{ transform: scale(0.95); background: rgba(0,242,255,0.1); }}
-        .menu-btn i {{ display: block; font-size: 22px; color: var(--neon); margin-bottom: 8px; }}
-
-        .section-title {{ color: var(--neon); font-size: 11px; font-weight: 900; letter-spacing: 1px; margin-bottom: 15px; text-transform: uppercase; display: flex; align-items: center; gap: 8px; }}
-
-        .add-std-btn {{ 
-            text-decoration: none; color: var(--neon); font-size: 10px; 
-            background: rgba(0,242,255,0.1); padding: 6px 14px; border-radius: 12px; 
-            border: 1px solid var(--neon); float: right; 
-        }}
-
-        .toggle-btn {{ 
-            background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); 
-            padding: 6px 12px; border-radius: 8px; font-size: 9px; color: #777; 
-            cursor: pointer; transition: 0.3s; font-weight: bold;
-        }}
-        input:checked + .toggle-btn {{ background: var(--red); color: white; border-color: var(--red); box-shadow: 0 0 10px var(--red); }}
-
-        .save-btn {{ 
-            width: 100%; padding: 18px; border: none; border-radius: 20px; 
-            background: var(--neon); color: black; font-weight: 900; 
-            margin-top: 15px; cursor: pointer; box-shadow: 0 5px 20px rgba(0,242,255,0.4); 
-        }}
-
-        .bottom-nav {{ 
-            position: fixed; bottom: 0; left: 0; right: 0; height: 75px; 
-            background: rgba(10,10,10,0.9); backdrop-filter: blur(20px); 
-            border-top: 1px solid rgba(255,255,255,0.1); display: flex; 
-            justify-content: space-around; align-items: center; z-index: 1000; 
-        }}
+        .user-chip {{ background: rgba(0,0,0,0.5); border: 1.5px solid var(--neon); padding: 4px 10px; border-radius: 20px; text-decoration: none; color: white; font-size: 12px; display: flex; align-items: center; gap: 8px; }}
+        .menu-grid {{ display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 25px; }}
+        .menu-btn {{ background: var(--glass); border-radius: 15px; padding: 12px 5px; text-align: center; text-decoration: none; color: white; border: 1px solid rgba(255,255,255,0.05); }}
+        .menu-btn i {{ display: block; font-size: 18px; color: var(--neon); margin-bottom: 5px; }}
+        .section-title {{ color: var(--neon); font-size: 10px; font-weight: 900; letter-spacing: 1px; margin-bottom: 15px; text-transform: uppercase; }}
+        .toggle-btn {{ background: rgba(255,255,255,0.05); padding: 6px 12px; border-radius: 8px; font-size: 9px; color: #777; cursor: pointer; font-weight: bold; border: 1px solid rgba(255,255,255,0.1); }}
+        input:checked + .toggle-btn {{ background: var(--red); color: white; border-color: var(--red); }}
+        .save-btn {{ width: 100%; padding: 18px; border: none; border-radius: 20px; background: var(--neon); color: black; font-weight: 900; margin-top: 15px; cursor: pointer; }}
+        .bottom-nav {{ position: fixed; bottom: 0; left: 0; right: 0; height: 70px; background: rgba(10,10,10,0.9); backdrop-filter: blur(20px); display: flex; justify-content: space-around; align-items: center; border-top: 1px solid rgba(255,255,255,0.1); }}
         .nav-item {{ text-decoration: none; color: #555; font-size: 10px; text-align: center; }}
         .nav-item.active {{ color: var(--neon); }}
-        .nav-item i {{ font-size: 20px; display: block; margin-bottom: 4px; }}
+        .nav-item i {{ font-size: 20px; display: block; }}
     </style>
 </head>
 <body>
     <div class="overlay"></div>
     <div class="container">
         <div class="header">
-            <div style="color:var(--neon); font-weight:900; font-size:18px; letter-spacing:-1px;">MENTOR<span style="color:white; font-weight:100;">PRO</span></div>
+            <div style="color:var(--neon); font-weight:900; font-size:18px;">MENTOR<span style="color:white; font-weight:100;">PRO</span></div>
             <a href="/teacher-profile/" class="user-chip">
                 <span>{teacher.full_name.split()[0]}</span>
-                <div style="width:22px; height:22px; background:var(--neon); border-radius:50%; color:black; display:flex; align-items:center; justify-content:center; font-weight:bold; font-size:11px;">{teacher.full_name[0]}</div>
+                <div style="width:20px; height:20px; background:var(--neon); border-radius:50%; color:black; display:flex; align-items:center; justify-content:center; font-weight:bold; font-size:10px;">{teacher.full_name[0]}</div>
             </a>
         </div>
 
         <div class="menu-grid">
-            <a href="/reels/" class="menu-btn glass"><i class="fas fa-bolt"></i><span style="font-size:10px;">Reels</span></a>
-            <a href="/teacher-schedule/" class="menu-btn glass"><i class="fas fa-clock"></i><span style="font-size:10px;">Jadval</span></a>
-            <a href="/create-test/" class="menu-btn glass"><i class="fas fa-plus-circle"></i><span style="font-size:10px;">Testlar</span></a>
+            <a href="/reels/" class="menu-btn"><i class="fas fa-play"></i><span style="font-size:9px;">Reels</span></a>
+            <a href="/teacher-schedule/" class="menu-btn"><i class="fas fa-clock"></i><span style="font-size:9px;">Jadval</span></a>
+            <a href="/create-test/" class="menu-btn"><i class="fas fa-plus"></i><span style="font-size:9px;">Test</span></a>
+            <a href="/view-projects/" class="menu-btn" style="border: 1px solid var(--neon);"><i class="fas fa-folder-open"></i><span style="font-size:9px;">Loyihalar</span></a>
         </div>
 
-        <div class="section-title"><i class="fas fa-chart-line"></i> Sinf statistikasi</div>
-        <div class="glass" style="padding:18px; border-radius:22px; margin-bottom:25px;">
-            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
-                <span style="color:#888; font-size:11px;">TOP O'QUVCHI:</span>
-                <div style="font-size:13px;">{top_html}</div>
+        <div class="section-title">Sinf statistikasi</div>
+        <div class="glass" style="padding:15px; margin-bottom:25px;">
+            <div style="display:flex; justify-content:space-between; font-size:12px; margin-bottom:10px;">
+                <span style="color:#888;">TOP O'QUVCHI:</span>
+                <div>{top_html}</div>
             </div>
-            <div style="height:1px; background:rgba(255,255,255,0.05); margin-bottom:12px;"></div>
-            <div style="color:#888; font-size:11px; margin-bottom:8px;">SO'NGGI TEST NATIJALARI:</div>
             {results_rows}
         </div>
 
-        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
-            <div class="section-title" style="margin-bottom:0;"><i class="fas fa-users"></i> {s_n}-{s_p} Sinf o'quvchilari</div>
-            <a href="/add-student/" class="add-std-btn"><i class="fas fa-plus"></i></a>
-        </div>
-
+        <div class="section-title">{s_n}-{s_p} Sinf o'quvchilari</div>
         <form method="POST" action="/save-attendance/">
             <input type="hidden" name="csrfmiddlewaretoken" value="{token}">
             {students_html}
-            <button type="submit" class="save-btn">DAVOMATNI YAKUNLASH</button>
+            <button type="submit" class="save-btn">DAVOMATNI SAQLASH</button>
         </form>
     </div>
 
     <nav class="bottom-nav">
         <a href="/teacher-dashboard/" class="nav-item active"><i class="fas fa-home"></i><span>Asosiy</span></a>
-        <a href="/teacher-homeworks/" class="nav-item"><i class="fas fa-book"></i><span>Vazifalar</span></a>
+        <a href="/view-projects/" class="nav-item"><i class="fas fa-file-pdf"></i><span>Loyihalar</span></a>
         <a href="/compete/" class="nav-item"><i class="fas fa-trophy"></i><span>Reyting</span></a>
-        <a href="/teacher-profile/" class="nav-item"><i class="fas fa-cog"></i><span>Profil</span></a>
+        <a href="/teacher-profile/" class="nav-item"><i class="fas fa-user"></i><span>Profil</span></a>
     </nav>
+</body>
+</html>
+    """
+    return HttpResponse(html)
+def place_order(request, book_id):
+    # Session orqali foydalanuvchini aniqlash
+    user_login = request.session.get('user_login')
+    if not user_login:
+        return redirect('/')  # Login qilmagan bo'lsa kirish sahifasiga
+
+    user_profile = Profile.objects.filter(login=user_login).first()
+    book = Book.objects.get(id=book_id)
+
+    # DIQQAT: Modelda 'user' emas, 'student' maydoni bor.
+    # 'is_returned' esa default False, uni yaratishda yozish shart emas.
+    Order.objects.create(
+        student=user_profile,
+        book=book,
+        status='Kutilmoqda'
+    )
+    return redirect('/library/?ordered=true')
+def librarian_dashboard(request):
+    # O'qituvchi profilini tekshirish
+    tp = TeacherProfile.objects.filter(user=request.user).first()
+    if not tp or tp.subject_name != "Kutubxonachi":
+        return HttpResponse("Siz kutubxonachi emassiz!")
+
+    # Kitob qo'shish mantiqi (Xatoliklarni oldini olish bilan)
+    if request.method == "POST" and 'add_book' in request.POST:
+        genre = request.POST.get('genre')
+        Book.objects.create(
+            title=request.POST.get('title'),
+            author=request.POST.get('author'),
+            genre=genre if genre else "Umumiy",  # Janr bo'sh bo'lsa xato bermasligi uchun
+            count=request.POST.get('count', 1),
+            image_url=request.POST.get('image_url', ''),
+            price=request.POST.get('price', 0)
+        )
+        return redirect('/librarian-dashboard/')
+
+    # Ijara so'rovlari
+    orders = Order.objects.filter(status='Kutilmoqda').select_related('student', 'book')
+    token = get_token(request)
+    bg_image = static('12.jpg')  # Ro'yxatdan o'tish sahifasidagi rasm
+
+    orders_html = ""
+    for o in orders:
+        orders_html += f"""
+        <div style="background:rgba(255,255,255,0.1); padding:15px; border-radius:15px; margin-bottom:10px; border-left:4px solid #00f2ff; backdrop-filter: blur(10px);">
+            <b style="color:#00f2ff;">{o.student.full_name}</b> <br>
+            <small>Tel: {o.student.phone}</small> | <span>Kitob: <b>{o.book.title}</b></span><br>
+            <a href="/confirm-book/{o.id}/" style="background:#00f2ff; color:black; padding:8px 12px; border-radius:8px; text-decoration:none; font-weight:bold; font-size:12px; display:inline-block; margin-top:8px;">TASDIQLASH</a>
+        </div>"""
+
+    return HttpResponse(f"""
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Kutubxona Tizimi</title>
+        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+        <style>
+            :root {{ --neon: #00f2ff; }}
+            body {{ 
+                margin: 0; background: url('{bg_image}') center/cover fixed no-repeat; 
+                font-family: 'Segoe UI', sans-serif; color: white; min-height: 100vh;
+            }}
+            .overlay {{ position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.85); z-index: 1; }}
+            .container {{ position: relative; z-index: 2; max-width: 500px; margin: 0 auto; padding: 20px; }}
+            .card {{ 
+                background: rgba(20,20,20,0.8); backdrop-filter: blur(15px);
+                padding: 25px; border-radius: 25px; border: 1px solid rgba(0,242,255,0.2);
+                box-shadow: 0 15px 35px rgba(0,0,0,0.5); margin-bottom: 20px;
+            }}
+            h2, h3 {{ color: var(--neon); text-align: center; text-transform: uppercase; letter-spacing: 1px; }}
+            label {{ font-size: 11px; color: var(--neon); margin-bottom: 5px; display: block; font-weight: bold; }}
+            input {{ 
+                width: 100%; padding: 12px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.1);
+                background: rgba(0,0,0,0.5); color: white; outline: none; box-sizing: border-box; margin-bottom: 12px;
+            }}
+            input:focus {{ border-color: var(--neon); }}
+            .btn-save {{ 
+                width: 100%; padding: 15px; border-radius: 12px; border: none;
+                background: var(--neon); color: black; font-weight: 900; cursor: pointer;
+                text-transform: uppercase; transition: 0.3s;
+            }}
+            .btn-save:hover {{ box-shadow: 0 0 20px var(--neon); transform: scale(1.02); }}
+        </style>
+    </head>
+    <body>
+        <div class="overlay"></div>
+        <div class="container">
+            <h2><i class="fas fa-book"></i> Kutubxona Tizimi</h2>
+
+            <div class="card">
+                <h3>Yangi kitob qo'shish</h3>
+                <form method="POST">
+                    <input type="hidden" name="csrfmiddlewaretoken" value="{token}">
+                    <input type="hidden" name="add_book" value="1">
+
+                    <label>Kitob nomi (Title):</label>
+                    <input type="text" name="title" required placeholder="Masalan: O'tkan kunlar">
+
+                    <label>Muallif (Author):</label>
+                    <input type="text" name="author" required placeholder="Abdulla Qodiriy">
+
+                    <label>Janr (Genre):</label>
+                    <input type="text" name="genre" required placeholder="Tarixiy roman">
+
+                    <div style="display:flex; gap:10px;">
+                        <div style="flex:1;">
+                            <label>Soni (Count):</label>
+                            <input type="number" name="count" value="1" min="1">
+                        </div>
+                        <div style="flex:1;">
+                            <label>Narxi (XP):</label>
+                            <input type="number" name="price" value="0">
+                        </div>
+                    </div>
+
+                    <label>Rasm manzili (Image URL):</label>
+                    <input type="text" name="image_url" placeholder="https://...">
+
+                    <button type="submit" class="btn-save">BAZAGA SAQLASH</button>
+                </form>
+            </div>
+
+            <div class="card">
+                <h3><i class="fas fa-clock"></i> Ijara so'rovlari</h3>
+                {orders_html if orders_html else "<p style='text-align:center; color:#666;'>Hozircha so'rovlar yo'q</p>"}
+            </div>
+        </div>
+    </body>
+    </html>
+    """)
+def confirm_book_give(request, order_id):
+    order = Order.objects.get(id=order_id)
+    order.status = 'Berildi'
+    order.save()
+    book = order.book
+    if book.count > 0:
+        book.count -= 1
+        book.save()
+    return redirect('/librarian-dashboard/')
+def view_projects_view(request):
+    if not request.user.is_authenticated:
+        return redirect('/')
+
+    teacher = TeacherProfile.objects.filter(user=request.user).first()
+    if not teacher:
+        return HttpResponse("O'qituvchi profili topilmadi.")
+
+    # O'qituvchi dars beradigan fanlarni topish
+    my_subjects = Subject.objects.filter(teacher_user=request.user)
+
+    # Loyihalarni 'created_at' bo'yicha saralash (Xatolik shu yerda edi)
+    projects = ProjectWork.objects.filter(subject__in=my_subjects).order_by('-created_at')
+
+    projects_html = ""
+    for p in projects:
+        projects_html += f"""
+        <div class="glass" style="padding: 15px; margin-bottom: 12px; border-radius: 20px; border-left: 4px solid #00f2ff;">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+                <div style="flex: 1; padding-right: 10px;">
+                    <div style="color: #00f2ff; font-weight: bold; font-size: 14px;">{p.subject.name}</div>
+                    <div style="color: #fff; font-size: 12px; margin: 5px 0;">{p.members_info}</div>
+                    <div style="color: #888; font-size: 10px;">
+                        <i class="fas fa-user"></i> {p.student.full_name} | 
+                        <i class="fas fa-calendar"></i> {p.created_at.strftime('%d.%m.%Y')}
+                    </div>
+                </div>
+                <a href="{p.pdf_file.url}" target="_blank" style="background: rgba(0,242,255,0.1); color: #00f2ff; width: 45px; height: 45px; border-radius: 15px; display: flex; align-items: center; justify-content: center; text-decoration: none; border: 1px solid rgba(0,242,255,0.3);">
+                    <i class="fas fa-file-pdf" style="font-size: 20px;"></i>
+                </a>
+            </div>
+        </div>"""
+
+    if not projects:
+        projects_html = "<div style='text-align:center; color:#555; margin-top:50px;'>Hali loyihalar kelmadi.</div>"
+
+    html = f"""
+<!DOCTYPE html>
+<html lang="uz">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        :root {{ --neon: #00f2ff; --glass: rgba(255, 255, 255, 0.08); }}
+        body {{ 
+            margin: 0; background: #0a0a0a url('/static/12.jpg') no-repeat center fixed; 
+            background-size: cover; font-family: 'Segoe UI', sans-serif; color: white; 
+        }}
+        .overlay {{ position: fixed; inset: 0; background: rgba(0,0,0,0.85); backdrop-filter: blur(20px); z-index: -1; }}
+        .container {{ max-width: 450px; margin: 0 auto; padding: 20px; }}
+        .glass {{ background: var(--glass); backdrop-filter: blur(10px); border: 1px solid rgba(255,255,255,0.1); }}
+        .header {{ display: flex; align-items: center; gap: 15px; margin-bottom: 25px; }}
+        .back-btn {{ color: white; font-size: 20px; text-decoration: none; transition: 0.3s; }}
+        .back-btn:hover {{ color: var(--neon); }}
+    </style>
+</head>
+<body>
+    <div class="overlay"></div>
+    <div class="container">
+        <div class="header">
+            <a href="/teacher-dashboard/" class="back-btn"><i class="fas fa-arrow-left"></i></a>
+            <h2 style="color: var(--neon); margin: 0; font-size: 18px; text-transform: uppercase; letter-spacing: 1px;">Loyiha ishlari</h2>
+        </div>
+        {projects_html}
+    </div>
 </body>
 </html>
     """
@@ -2852,11 +2945,13 @@ def add_student_view(request):
     """
     return HttpResponse(html)
 def teacher_reg_view(request):
-    """GET so'rovi uchun chiroyli ro'yxatdan o'tish formasi"""
     bg_image = static('12.jpg')
-    # CSRF token olish
     from django.middleware.csrf import get_token
     token = get_token(request)
+
+    # Ma'muryat lavozimlari
+    admin_roles = ["Direktor", "Kutubxonachi", "ZamDirektor", "Psixolog", "Manaviyatchi"]
+    roles_options = "".join([f"<option value='{role}'>{role}</option>" for role in admin_roles])
 
     return HttpResponse(f"""
     <!DOCTYPE html>
@@ -2864,7 +2959,7 @@ def teacher_reg_view(request):
     <head>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>Ustozlar Ro'yxati</title>
+        <title>Ro'yxatdan o'tish</title>
         <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
         <style>
             :root {{ --neon: #00f2ff; }}
@@ -2873,75 +2968,89 @@ def teacher_reg_view(request):
                 font-family: 'Segoe UI', sans-serif; color: white;
                 display: flex; justify-content: center; align-items: center; min-height: 100vh;
             }}
-            .overlay {{ position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.88); z-index: 1; }}
+            .overlay {{ position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.85); z-index: 1; }}
             .card {{ 
-                position: relative; z-index: 2; width: 90%; max-width: 480px; 
-                background: rgba(20,20,20,0.75); backdrop-filter: blur(25px);
-                padding: 35px; border-radius: 30px; border: 1px solid rgba(0,242,255,0.25);
-                box-shadow: 0 15px 35px rgba(0,0,0,0.5);
+                position: relative; z-index: 2; width: 95%; max-width: 550px; 
+                background: rgba(20,20,20,0.85); backdrop-filter: blur(20px);
+                padding: 30px; border-radius: 25px; border: 1px solid rgba(0,242,255,0.2);
+                box-shadow: 0 20px 50px rgba(0,0,0,0.5);
             }}
-            h2 {{ color: var(--neon); text-align: center; text-transform: uppercase; letter-spacing: 2px; margin-bottom: 25px; font-size: 22px; }}
-            .grid {{ display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }}
+            h2 {{ color: var(--neon); text-align: center; margin-bottom: 20px; text-transform: uppercase; font-size: 20px; }}
+            .grid {{ display: grid; grid-template-columns: 1fr 1fr; gap: 15px; }}
             .full {{ grid-column: 1 / -1; }}
-            label {{ font-size: 11px; color: var(--neon); font-weight: bold; margin-left: 5px; text-transform: uppercase; opacity: 0.8; }}
-            input {{ 
-                width: 100%; padding: 12px; margin-top: 5px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.1);
-                background: rgba(0,0,0,0.4); color: white; outline: none; box-sizing: border-box; transition: 0.3s;
+            label {{ font-size: 11px; color: var(--neon); margin-bottom: 5px; display: block; font-weight: bold; }}
+            input, select {{ 
+                width: 100%; padding: 12px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.1);
+                background: rgba(0,0,0,0.5); color: white; outline: none; box-sizing: border-box; transition: 0.3s;
             }}
-            input:focus {{ border-color: var(--neon); box-shadow: 0 0 10px rgba(0,242,255,0.2); }}
+            input:focus, select:focus {{ border-color: var(--neon); box-shadow: 0 0 10px rgba(0,242,255,0.2); }}
+            .hidden {{ display: none !important; }}
             .btn-reg {{ 
-                width: 100%; padding: 16px; margin-top: 25px; border-radius: 15px; border: none;
+                width: 100%; padding: 15px; margin-top: 20px; border-radius: 12px; border: none;
                 background: var(--neon); color: black; font-weight: 900; cursor: pointer;
-                text-transform: uppercase; letter-spacing: 1px; transition: 0.3s;
+                text-transform: uppercase; transition: 0.3s;
             }}
-            .btn-reg:hover {{ box-shadow: 0 0 25px rgba(0,242,255,0.5); transform: translateY(-2px); }}
         </style>
     </head>
     <body>
         <div class="overlay"></div>
         <div class="card">
-            <h2><i class="fas fa-user-plus"></i> Ustozlar Registratsiyasi</h2>
+            <h2><i class="fas fa-user-plus"></i> Ro'yxatdan o'tish</h2>
             <form method="POST" action="/teacher-registration-save/">
                 <input type="hidden" name="csrfmiddlewaretoken" value="{token}">
-
                 <div class="grid">
                     <div class="full">
                         <label>To'liq ism-familiya:</label>
-                        <input type="text" name="full_name" placeholder="Masalan: Azizov Anvar" required>
+                        <input type="text" name="full_name" placeholder="Ism Familiya" required>
                     </div>
-                    <div>
-                        <label>Login:</label>
-                        <input type="text" name="username" placeholder="Login" required>
-                    </div>
-                    <div>
-                        <label>Parol:</label>
-                        <input type="password" name="password" placeholder="Parol" required>
-                    </div>
-                    <div class="full">
+                    <div><label>Login:</label><input type="text" name="username" required></div>
+                    <div><label>Parol:</label><input type="password" name="password" required></div>
+                    <div class="full" id="subject_box">
                         <label>Dars beradigan faningiz:</label>
-                        <input type="text" name="subject" placeholder="Masalan: Matematika" required>
+                        <input type="text" id="subject_input" name="subject" placeholder="Matematika..." oninput="checkInput()">
                     </div>
-                    <div>
-                        <label>Sinf rahbari (ixtiyoriy):</label>
-                        <input type="text" name="class_leader" placeholder="Masalan: 7-B">
+                    <div class="full" id="admin_box">
+                        <label>Maktab Ma'muryati (Lavozim):</label>
+                        <select id="admin_select" name="admin_role" onchange="checkInput()">
+                            <option value="">--- Tanlang ---</option>
+                            {roles_options}
+                        </select>
                     </div>
-                    <div>
-                        <label>Telefon raqam:</label>
-                        <input type="text" name="phone" placeholder="+998" required>
-                    </div>
+                    <div id="class_box"><label>Sinf rahbari:</label><input type="text" name="class_leader" placeholder="7-B"></div>
+                    <div><label>Telefon raqam:</label><input type="text" name="phone" placeholder="+998" required></div>
                     <div class="full">
                         <label>Manzil (Mahalla, Ko'cha, Uy):</label>
-                        <div style="display:flex; gap:5px;">
+                        <div style="display:flex; gap:8px;">
                             <input type="text" name="mahalla" placeholder="Mahalla">
                             <input type="text" name="street" placeholder="Ko'cha">
-                            <input type="text" name="home" placeholder="Uy" style="width:70px;">
+                            <input type="text" name="home" placeholder="Uy" style="flex:0 0 70px;">
                         </div>
                     </div>
                 </div>
-
                 <button type="submit" class="btn-reg">Ro'yxatdan o'tish</button>
             </form>
         </div>
+        <script>
+            function checkInput() {{
+                const subject = document.getElementById('subject_input');
+                const admin = document.getElementById('admin_select');
+                const adminBox = document.getElementById('admin_box');
+                const subjectBox = document.getElementById('subject_box');
+                const classBox = document.getElementById('class_box');
+
+                if (subject.value.trim() !== "") {{
+                    adminBox.classList.add('hidden');
+                    classBox.classList.remove('hidden');
+                }} else if (admin.value !== "") {{
+                    subjectBox.classList.add('hidden');
+                    classBox.classList.add('hidden');
+                }} else {{
+                    adminBox.classList.remove('hidden');
+                    subjectBox.classList.remove('hidden');
+                    classBox.classList.remove('hidden');
+                }}
+            }}
+        </script>
     </body>
     </html>
     """)
@@ -2951,64 +3060,48 @@ def teacher_registration_save(request):
         username = data.get('username')
         password = data.get('password')
         full_name = data.get('full_name')
+        subject_name = data.get('subject')
+        admin_role = data.get('admin_role')
+        class_leader = data.get('class_leader')
+        phone = data.get('phone')
 
-        # 1. Login tekshiruvi
         if User.objects.filter(username=username).exists():
-            return HttpResponse(
-                "<script>alert('Bu login band! Iltimos, boshqa login tanlang.'); window.history.back();</script>")
+            return HttpResponse("<script>alert('Bu login band!'); window.history.back();</script>")
 
         try:
             with transaction.atomic():
-                # 2. Django User yaratish
                 user = User.objects.create_user(
-                    username=username,
-                    password=password,
-                    is_staff=True,
-                    first_name=full_name.split()[0] if full_name else ""
+                    username=username, password=password,
+                    is_staff=True if admin_role else False
                 )
 
-                # 3. ASOSIY Profile yaratish (MUHIM!)
-                # Dashboard "Profile.objects.get(login=...)" deb qidirayotgani uchun bu shart
+                # Profile yaratish
                 Profile.objects.create(
-                    login=username,
-                    password=password,  # Shifrlanmagan holda saqlash profilingiz mantiqiga qarab
-                    full_name=full_name,
-                    phone=data.get('phone'),
-                    sinf=data.get('class_leader', '').split('-')[0] if '-' in data.get('class_leader', '') else "0",
-                    parallel=data.get('class_leader', '').split('-')[1] if '-' in data.get('class_leader', '') else ""
+                    login=username, password=password, full_name=full_name, phone=phone,
+                    sinf=admin_role if admin_role else (class_leader.split('-')[0] if '-' in str(class_leader) else "0")
                 )
 
-                # 4. TeacherProfile yaratish
+                # TeacherProfile yaratish
                 TeacherProfile.objects.create(
-                    user=user,
-                    full_name=full_name,
-                    subject_name=data.get('subject'),
-                    class_leader=data.get('class_leader'),
-                    phone=data.get('phone'),
-                    address_mahalla=data.get('mahalla'),
-                    address_street=data.get('street'),
-                    address_home_number=data.get('home')
+                    user=user, full_name=full_name,
+                    subject_name=subject_name if subject_name else admin_role,
+                    class_leader=class_leader if not admin_role else "Ma'muriyat",
+                    phone=phone, address_mahalla=data.get('mahalla', ''),
+                    address_street=data.get('street', ''), address_home_number=data.get('home', '')
                 )
 
-                # 5. Subject (Fan) yaratish yoki yangilash
-                subject_name = data.get('subject')
                 if subject_name:
-                    Subject.objects.update_or_create(
-                        name=subject_name,
-                        defaults={'teacher_user': user}
-                    )
+                    Subject.objects.update_or_create(name=subject_name, defaults={'teacher_user': user})
 
-                # 6. Tizimga avtomatik kirish
                 auth_login(request, user)
 
-                # Muvaffaqiyatli xabar va o'tish
+                # --- YO'NALTIRISH MANTIQI ---
+                if admin_role == "Kutubxonachi":
+                    return redirect('/librarian-dashboard/')
                 return redirect('/teacher-dashboard/')
 
         except Exception as e:
-            # Xatolikni konsolga chiqarish (debugging uchun)
-            print(f"REGISTRATION ERROR: {e}")
-            return HttpResponse(f"Xatolik yuz berdi: {str(e)}")
-
+            return HttpResponse(f"Xatolik: {e}")
     return redirect('/teacher-register/')
 def give_homework_view(request):
     if request.method == "POST":
@@ -4200,8 +4293,6 @@ def create_competition_from_test(request, test_id):
         return redirect('second_list')  # Bellashuvlar ro'yxati sahifasiga
 
     return render(request, 'teacher/create_competition.html', {'test': test})
-
-
 def create_test_view(request):
     if request.method == "POST":
         sinf = request.POST.get('sinf')
