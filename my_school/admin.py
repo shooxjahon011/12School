@@ -1,8 +1,8 @@
 from django.contrib import admin
 from .models import (
-    Profile, Subject, Teacher, TeacherProfile, TeacherReels,
-    Post, Comment, Video, Message, TeacherTest, TestResult,
-    Homework, HomeworkStatus, ProjectWork, Book, Order, Notification, VideoComment,
+    Profile, Subject, Teacher, TeacherProfile,
+ Message, TeacherTest, TestResult,
+    Homework, HomeworkStatus, ProjectWork, Book, Order, Notification,
     ClassMessage, Attendance, Schedule
 )
 
@@ -55,9 +55,6 @@ class HomeworkAdmin(admin.ModelAdmin):
 class ClassTestAdmin(admin.ModelAdmin):
     list_display = ('title', 'subject', 'sinf', 'parallel')
 
-# 7. Ijtimoiy va Chat (Qisqa ko'rinishda)
-admin.site.register(Post)
-admin.site.register(Video)
 admin.site.register(Message)
 admin.site.register(ClassMessage)
 admin.site.register(Attendance)
