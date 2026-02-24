@@ -11,7 +11,7 @@ from django.http import JsonResponse
 from django.contrib import messages
 from django.views.decorators.csrf import csrf_exempt
 from django.db.models import Q
-from .models import Post, Profile,Comment,Message,TeacherReels,TeacherTest,Subject,Competition,Schedule,VideoComment,ClassMessage,Teacher,TestResult, ProjectWork,Book,Notification,Order,User,Attendance,Video,Subject, Homework, HomeworkStatus,TeacherProfile
+from .models import Profile,Message,TeacherTest,Subject,Competition,Schedule,ClassMessage,Teacher,TestResult, ProjectWork,Book,Notification,Order,User,Attendance,Subject, Homework, HomeworkStatus,TeacherProfile
 from django.contrib.auth import authenticate, login as auth_login
 import re
 from django.contrib.auth.decorators import login_required
@@ -162,7 +162,6 @@ def submit_project_view(request):
         <nav class="bottom-nav">
             <a href="/second/" class="nav-item active"><i class="fas fa-th-large"></i><span>Menyu</span></a>
             <a href="/library/" class="nav-item"><i class="fas fa-book"></i><span>Kutubxona</span></a>
-            <a href="/reels/" class="nav-item"><i class="fas fa-play-circle"></i><span>Reels</span></a>
             <a href="/profile/" class="nav-item"><i class="fas fa-user"></i><span>Profil</span></a>
         </nav>
 
@@ -179,51 +178,6 @@ def submit_project_view(request):
     </html>
     """
     return HttpResponse(html)
-@csrf_exempt
-def comment_post(request, post_id):
-    # 1. Foydalanuvchini tekshirish
-    user_login = request.session.get('user_login')
-    if not user_login:
-        return JsonResponse({'status': 'error', 'message': 'Login talab qilinadi'}, status=403)
-
-    user = Profile.objects.filter(login=user_login).first()
-    post = get_object_or_404(Post, id=post_id)
-
-    # 2. Yangi izoh qo'shish (POST)
-    if request.method == "POST":
-        text = request.POST.get('text')
-        if text:
-            comment = Comment.objects.create(
-                post=post,
-                author=user,
-                text=text
-            )
-
-            # Izoh muvaffaqiyatli qo'shilgach, kerakli ma'lumotlarni qaytaramiz
-            return JsonResponse({
-                'status': 'ok',
-                'count': post.comments.count(),
-                'author': user.full_name,
-                'author_login': user.login,
-                'avatar': user.image.url if user.image else static('default_avatar.png'),
-                'text': text,
-                'created_at': "Hozirgina"
-            })
-
-    # 3. Izohlarni olish (GET yoki xato POST bo'lsa)
-    comments_list = []
-    for c in post.comments.all().order_by('-created_at'):
-        comments_list.append({
-            'author': c.author.full_name,
-            'avatar': c.author.image.url if c.author.image else static('default_avatar.png'),
-            'text': c.text,
-            'date': c.created_at.strftime("%H:%M")
-        })
-
-    return JsonResponse({
-        'comments': comments_list,
-        'count': post.comments.count()
-    })
 def return_book_view(request, order_id):
     # 1. Faqat kutubxonachi kira olishini tekshirish (ixtiyoriy lekin tavsiya etiladi)
     user_login = request.session.get('user_login')
@@ -597,8 +551,6 @@ def library_view(request):
     </body>
     </html>
     """)
-
-
 def second_view(request):
     user_login = request.session.get('user_login')
     if not user_login:
@@ -621,23 +573,6 @@ def second_view(request):
 
     display_name = user.full_name if user.full_name else user.login
 
-    # 1. ACTION BUTTONS (+ tugmasi kichraytirildi)
-    if is_librarian:
-        new_orders = Order.objects.filter(is_returned=False).count()
-        action_btns_html = f"""
-        <div class="action-btns">
-            <a href="/library/orders/" class="mini-btn" style="background:#ffd700; color:#000;">
-                <i class="fas fa-bell"></i> {new_orders}
-            </a>
-            <a href="/post-view/" class="plus-btn"><i class="fas fa-plus"></i></a>
-        </div>"""
-    else:
-        action_btns_html = f"""
-        <div class="action-btns">
-            <a href="/upload-video/" class="plus-btn"><i class="fas fa-plus"></i></a>
-        </div>"""
-
-    # 2. MAIN MENU CONTENT
     if is_librarian:
         menu_content = f"""
         <div class="grid-2" style="grid-template-columns: 1fr;">
@@ -775,7 +710,6 @@ def second_view(request):
                 <span style="font-size: 11px; font-weight: 700;">{display_name[:12]}</span>
                 <img src="{avatar_url}">
             </a>
-            {action_btns_html}
         </div>
     </div>
 
@@ -786,7 +720,6 @@ def second_view(request):
     <nav class="bottom-nav">
         <a href="/second/" class="nav-item active"><i class="fas fa-th-large"></i><span>Menyu</span></a>
         <a href="/library/" class="nav-item"><i class="fas fa-book"></i><span>Kutubxona</span></a>
-        <a href="/reels/" class="nav-item"><i class="fas fa-play-circle"></i><span>Reels</span></a>
         <a href="/profile/" class="nav-item"><i class="fas fa-user"></i><span>Profil</span></a>
     </nav>
 </body>
@@ -810,14 +743,6 @@ def profile_view(request, username=None):
     # Tizimga kirgan odam ob'ekti
     me = Profile.objects.filter(login=my_login).first()
 
-    # 2. STATISTIKA (OBUNALAR)
-    followers_count = user.followers.count() if hasattr(user, 'followers') else 0
-    following_count = user.following.count() if hasattr(user, 'following') else 0
-
-    # Obuna holati
-    is_following = False
-    if me and not is_owner:
-        is_following = me.following.filter(id=user.id).exists()
 
     # 3. MA'LUMOTLARNI YANGILASH
     if request.method == "POST" and is_owner:
@@ -833,13 +758,6 @@ def profile_view(request, username=None):
 
     avatar_url = user.image.url if user.image else f"https://ui-avatars.com/api/?name={user.login}"
     bg_image = static('12.jpg')
-
-    # OBUNA TUGMASI HTML
-    follow_btn_html = ""
-    if not is_owner:
-        btn_text = "FOLLOWING" if is_following else "OBUNA BO'LISH"
-        btn_style = "background:white; color:black;" if is_following else "background:var(--neon); color:black;"
-        follow_btn_html = f'<button onclick="ajaxFollow({user.id}, this)" style="{btn_style} width:100%; padding:15px; border-radius:25px; border:none; font-weight:900; margin-bottom:15px; cursor:pointer;">{btn_text}</button>'
 
     return HttpResponse(f"""
     <!DOCTYPE html>
@@ -893,18 +811,6 @@ def profile_view(request, username=None):
                     {user.sinf}-{user.parallel} SINF O'QUVCHISI
                 </div>
 
-                <div class="stats-container">
-                    <div class="stat-box">
-                        <b id="follower-count">{followers_count}</b>
-                        <span>Obunachilar</span>
-                    </div>
-                    <div class="stat-box">
-                        <b>{following_count}</b>
-                        <span>Obunalar</span>
-                    </div>
-                </div>
-
-                {follow_btn_html}
 
                 <div class="info-box">
                     <span class="label">Nickname (Login):</span>
@@ -924,7 +830,6 @@ def profile_view(request, username=None):
         <nav class="bottom-nav">
             <a href="/second/" class="nav-item"><i class="fas fa-th-large"></i><span>Menyu</span></a>
             <a href="/library/" class="nav-item"><i class="fas fa-book"></i><span>Kutubxona</span></a>
-            <a href="/reels/" class="nav-item"><i class="fas fa-play-circle"></i><span>Reels</span></a>
             <a href="/profile/" class="nav-item active"><i class="fas fa-user"></i><span>Profil</span></a>
         </nav>
 
@@ -1344,267 +1249,6 @@ def verify_code_view(request):
     </html>
     """
     return HttpResponse(html)
-def reels_view(request):
-    user_login = request.session.get('user_login')
-    if not user_login:
-        return redirect('/')
-
-    me = Profile.objects.filter(login=user_login).first()
-    videos = Video.objects.all().order_by('-id')
-    token = get_token(request)
-
-    reels_html = ""
-
-    for vid in videos:
-        author = vid.author
-        if not author: continue
-
-        username = author.login
-        avatar_url = author.image.url if author.image else f"https://ui-avatars.com/api/?name={username}&background=random&color=fff"
-        sinf_txt = f"{getattr(author, 'sinf', '8')}-{getattr(author, 'parallel', 'A')}"
-
-        # XABARLARNI OLISH
-        comments = VideoComment.objects.filter(video=vid).order_by('-id')
-        comments_html = ""
-        for c in comments:
-            c_user = c.user
-            c_avatar = c_user.image.url if c_user.image else f"https://ui-avatars.com/api/?name={c_user.login}"
-            comments_html += f"""
-                <div class="comment-item" style="display:flex; gap:12px; margin-bottom:15px; text-align:left;">
-                    <img src="{c_avatar}" style="width:34px; height:34px; border-radius:50%; object-fit:cover;">
-                    <div class="comment-text">
-                        <b style="color:#00f2ff; font-size:12px;">@{c_user.login}</b>
-                        <p style="margin:2px 0; color:#eee; font-size:13px;">{c.text}</p>
-                    </div>
-                </div>"""
-
-        reels_html += f"""
-        <div class="reel-step" id="reel-{vid.id}">
-            <video class="video-item" loop playsinline src="{vid.video_file.url}" onclick="playPause(this)"></video>
-
-            <div class="video-info">
-                <div style="display:flex; align-items:center; gap:12px;">
-                    <div class="avatar-glow">
-                        <img src="{avatar_url}" onclick="openProfile({vid.id})" class="info-avatar">
-                    </div>
-                    <span class="info-username" onclick="openProfile({vid.id})">@{username}</span>
-                    <button class="follow-btn" id="follow-btn-{author.id}" onclick="ajaxAction('/toggle-follow/{author.id}/', this)">
-                        {"FOLLOWING" if author in me.following.all() else "OBUNA"}
-                    </button>
-                </div>
-                <div class="video-title">{vid.title or ""}</div>
-            </div>
-
-            <div class="side-panel">
-                <div onclick="ajaxLike({vid.id}, this)">
-                    <i class="{'fas' if me in vid.likes.all() else 'far'} fa-heart" style="color:{'#ff2b54' if me in vid.likes.all() else 'white'};"></i>
-                    <p>{vid.likes.count()}</p>
-                </div>
-                <div onclick="openComments({vid.id})">
-                    <i class="fas fa-comment-dots"></i>
-                    <p id="comment-count-{vid.id}">{comments.count()}</p>
-                </div>
-                <div onclick="shareToChat({vid.id})">
-                    <i class="fas fa-paper-plane"></i>
-                    <p style="font-size:10px;">CHATGA</p>
-                </div>
-            </div>
-
-            <div id="modal-{vid.id}" class="modal-overlay" onclick="if(event.target==this) closeProfile({vid.id})">
-                <div class="modal-card">
-                    <div class="avatar-modal-glow">
-                        <img src="{avatar_url}" class="modal-avatar">
-                    </div>
-                    <h2 class="modal-name">{author.full_name}</h2>
-                    <p class="modal-sinf">{sinf_txt} SINF O'QUVCHISI</p>
-
-                    <div class="login-badge">
-                        <span>NICKNAME (LOGIN):</span>
-                        <b>@{author.login}</b>
-                    </div>
-
-                    <div class="stats-row" style="display:flex; justify-content:space-around; margin-top:20px;">
-                        <div><b style="font-size:18px;">{author.followers.count()}</b><br><span style="font-size:11px; color:#666;">Obunachilar</span></div>
-                        <div><b style="font-size:18px;">{author.following.count()}</b><br><span style="font-size:11px; color:#666;">Obunalar</span></div>
-                    </div>
-
-                    <button class="close-btn" onclick="closeProfile({vid.id})">YOPISH</button>
-                </div>
-            </div>
-
-            <div id="comments-{vid.id}" class="modal-overlay" onclick="if(event.target==this) closeComments({vid.id})">
-                <div class="modal-card comments-card">
-                    <h3 style="margin-bottom:15px; font-size:18px; color:#00f2ff;">XABARLAR</h3>
-                    <div id="list-{vid.id}" class="comments-list" style="max-height:300px; overflow-y:auto; margin-bottom:15px;">
-                        {comments_html or f"<p id='empty-{vid.id}' style='color:#555; text-align:center;'>Hali xabarlar yo'q...</p>"}
-                    </div>
-                    <div class="input-area">
-                        <input type="text" id="input-{vid.id}" placeholder="Xabar yozing...">
-                        <button onclick="sendComment({vid.id})"><i class="fas fa-paper-plane"></i></button>
-                    </div>
-                </div>
-            </div>
-        </div>
-        """
-
-    return HttpResponse(f"""
-    <!DOCTYPE html>
-    <html lang="uz">
-    <head>
-        <meta charset="UTF-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
-        <style>
-            body, html {{ margin:0; padding:0; height:100%; background:#000; color:white; font-family:'Segoe UI', sans-serif; overflow:hidden; }}
-            .reels-container {{ height:100vh; overflow-y:scroll; scroll-snap-type: y mandatory; scrollbar-width:none; padding-bottom: 70px; }}
-            .reels-container::-webkit-scrollbar {{ display:none; }}
-            .reel-step {{ height:100vh; position:relative; scroll-snap-align:start; }}
-            .video-item {{ width:100%; height:100%; object-fit:cover; }}
-
-            .avatar-glow img {{ border: 2px solid #00f2ff; box-shadow: 0 0 15px #00f2ff; }}
-            .video-info {{ position:absolute; bottom:120px; left:15px; z-index:100; }}
-            .info-avatar {{ width:48px; height:48px; border-radius:50%; object-fit:cover; }}
-            .info-username {{ font-weight:bold; font-size:18px; text-shadow: 0 0 10px rgba(0,242,255,0.5); }}
-            .video-title {{ margin-top:10px; font-size:14px; color:#eee; }}
-
-            .modal-overlay {{ display:none; position:fixed; inset:0; background:rgba(0,0,0,0.85); z-index:2000; align-items:center; justify-content:center; backdrop-filter:blur(10px); }}
-            .modal-card {{ background:rgba(20,20,20,0.98); width:85%; max-width:340px; border-radius:30px; padding:25px; text-align:center; border:1px solid #333; }}
-            .modal-avatar {{ width:90px; height:90px; border-radius:50%; object-fit:cover; border:2px solid #00f2ff; }}
-            .modal-name {{ margin:15px 0 5px; font-size:20px; }}
-            .modal-sinf {{ color:#00f2ff; font-weight:bold; font-size:11px; margin-bottom:15px; }}
-            .login-badge {{ background:rgba(255,255,255,0.05); padding:10px; border-radius:15px; border:1px solid #222; }}
-            .login-badge span {{ font-size:9px; color:#666; display:block; }}
-            .close-btn {{ background:#1a1a1a; color:white; border:1px solid #333; padding:12px; border-radius:15px; width:100%; margin-top:20px; cursor:pointer; font-weight:bold; }}
-
-            .side-panel {{ position:absolute; right:15px; bottom:150px; display:flex; flex-direction:column; gap:20px; text-align:center; z-index:101; }}
-            .side-panel i {{ font-size:28px; }}
-            .side-panel p {{ margin:5px 0 0; font-size:12px; font-weight:bold; }}
-
-            .input-area {{ display:flex; background:#111; padding:5px; border-radius:30px; border:1px solid #333; margin-top:10px; }}
-            .input-area input {{ flex:1; background:transparent; border:none; padding:10px; color:white; outline:none; }}
-            .input-area button {{ background:#00f2ff; border:none; border-radius:50%; width:40px; height:40px; cursor:pointer; }}
-            .follow-btn {{ background:transparent; border:1px solid #00f2ff; color:#00f2ff; padding:5px 12px; border-radius:10px; font-size:10px; font-weight:bold; cursor:pointer; }}
-
-            /* BOTTOM NAV */
-            .bottom-nav {{ position:fixed; bottom:0; left:0; width:100%; background:rgba(0,0,0,0.9); display:flex; justify-content:space-around; padding:15px 0; border-top:1px solid rgba(255,255,255,0.1); z-index:1000; backdrop-filter:blur(10px); }}
-            .nav-item {{ text-decoration:none; color:#666; display:flex; flex-direction:column; align-items:center; font-size:10px; gap:4px; }}
-            .nav-item i {{ font-size:22px; }}
-            .nav-item.active {{ color:#00f2ff; }}
-        </style>
-    </head>
-    <body>
-        <div class="reels-container">{reels_html}</div>
-
-        <nav class="bottom-nav">
-            <a href="/second/" class="nav-item"><i class="fas fa-th-large"></i><span>Menyu</span></a>
-            <a href="/library/" class="nav-item"><i class="fas fa-book"></i><span>Kutubxona</span></a>
-            <a href="/reels/" class="nav-item active"><i class="fas fa-play-circle"></i><span>Reels</span></a>
-            <a href="/profile/" class="nav-item"><i class="fas fa-user"></i><span>Profil</span></a>
-        </nav>
-
-        <script>
-            function playPause(v) {{ v.paused ? v.play() : v.pause(); }}
-            function openProfile(id) {{ document.getElementById('modal-'+id).style.display='flex'; }}
-            function closeProfile(id) {{ document.getElementById('modal-'+id).style.display='none'; }}
-            function openComments(id) {{ document.getElementById('comments-'+id).style.display='flex'; }}
-            function closeComments(id) {{ document.getElementById('comments-'+id).style.display='none'; }}
-
-            async function ajaxAction(url, btn) {{
-                let res = await fetch(url);
-                let data = await res.json();
-                btn.innerText = data.status.toUpperCase();
-                btn.style.background = data.status === 'Following' ? '#00f2ff' : 'transparent';
-                btn.style.color = data.status === 'Following' ? '#000' : '#00f2ff';
-            }}
-
-            async function ajaxLike(id, div) {{
-                let res = await fetch('/like-video/'+id+'/');
-                let data = await res.json();
-                div.querySelector('p').innerText = data.total_likes;
-                div.querySelector('i').className = data.is_liked ? 'fas fa-heart' : 'far fa-heart';
-                div.querySelector('i').style.color = data.is_liked ? '#ff2b54' : 'white';
-            }}
-
-            async function sendComment(id) {{
-                let inp = document.getElementById('input-'+id);
-                if(!inp.value.trim()) return;
-                let fd = new FormData();
-                fd.append('text', inp.value);
-                let res = await fetch('/add-comment/'+id+'/', {{ method:'POST', body:fd }});
-                let d = await res.json();
-                if(d.status === 'ok') {{
-                    let list = document.getElementById('list-'+id);
-                    if(document.getElementById('empty-'+id)) document.getElementById('empty-'+id).remove();
-                    list.insertAdjacentHTML('afterbegin', `<div style="display:flex;gap:12px;margin-bottom:15px;text-align:left;"><img src="${{d.avatar}}" style="width:34px;height:34px;border-radius:50%;object-fit:cover;"><div style="text-align:left;"><b style="color:#00f2ff;font-size:12px;">@${{d.username}}</b><p style="margin:2px 0;color:#eee;font-size:13px;">${{inp.value}}</p></div></div>`);
-                    inp.value = "";
-                }}
-            }}
-
-            const obs = new IntersectionObserver(es => {{
-                es.forEach(e => {{
-                    let v = e.target.querySelector('video');
-                    if(v) e.isIntersecting ? v.play() : (v.pause(), v.currentTime=0);
-                }});
-            }}, {{ threshold:0.7 }});
-            document.querySelectorAll('.reel-step').forEach(s => obs.observe(s));
-        </script>
-    </body>
-    </html>
-    """)
-@csrf_exempt
-def add_comment(request, video_id):
-    if request.method == "POST":
-        user_login = request.session.get('user_login')
-        user_profile = Profile.objects.filter(login=user_login).first()
-        video = get_object_or_404(Video, id=video_id)
-        text = request.POST.get('text')
-
-        if text and user_profile:
-            # Modelingizda 'user' maydoni borligi uchun author= o'rniga user= ishlatamiz
-            VideoComment.objects.create(video=video, user=user_profile, text=text)
-            return JsonResponse({
-                'status': 'ok',
-                'username': user_profile.login,
-                'avatar': user_profile.image.url if user_profile.image else f"https://ui-avatars.com/api/?name={user_profile.login}"
-            })
-    return JsonResponse({'status': 'error'}, status=400)
-def like_video(request, video_id):
-    user_login = request.session.get('user_login')
-    user = Profile.objects.filter(login=user_login).first()
-    video = get_object_or_404(Video, id=video_id)
-
-    if user in video.likes.all():
-        video.likes.remove(user)
-        is_liked = False
-    else:
-        video.likes.add(user)
-        is_liked = True
-
-    return JsonResponse({'is_liked': is_liked, 'total_likes': video.likes.count()})
-def follow_user(request, author_id):
-    user_login = request.session.get('user_login')
-    me = Profile.objects.get(login=user_login)
-    target = get_object_or_404(Profile, id=author_id)
-
-    if target in me.following.all():
-        me.following.remove(target)
-        status = "Obuna"
-    else:
-        me.following.add(target)
-        status = "Following"
-    return JsonResponse({'status': status})
-def share_to_chat(request, video_id):
-    user_login = request.session.get('user_login')
-    user_profile = Profile.objects.get(login=user_login)
-    video = get_object_or_404(Video, id=video_id)
-
-    # ClassMessage modelida group/class maydoni borligiga ishonch hosil qiling
-    user_class = getattr(user_profile, 'group', None)
-    if user_class:
-        msg = f"🎥 Video: {video.title}\n{request.build_absolute_uri(video.video_file.url)}"
-        ClassMessage.objects.create(author=user_profile, group=user_class, text=msg)
-        return JsonResponse({'status': 'ok'})
-    return JsonResponse({'status': 'error', 'message': 'Sinf topilmadi'})
 def chat_view(request):
     user_login = request.session.get('user_login')
     if not user_login:
@@ -1794,175 +1438,6 @@ def order_process_view(request, book_id):
 
     except (Profile.DoesNotExist, Book.DoesNotExist):
         return redirect('/library/')
-@csrf_exempt
-def upload_video(request):
-    user_login = request.session.get('user_login')
-    if not user_login:
-        return redirect('/')
-
-    user_obj = get_object_or_404(Profile, login=user_login)
-
-    # Orqa fon rasmi manzili
-    bg_image_url = static('12.jpg')
-
-    if request.method == 'POST':
-        title = request.POST.get('title')
-        v_file = request.FILES.get('video')
-
-        if v_file:
-            try:
-                new_video = Video()
-                new_video.author = user_obj
-                new_video.video_file = v_file
-                new_video.title = title
-                new_video.save()
-                return redirect('/reels/')
-            except Exception as e:
-                return HttpResponse(f"Kutilmagan xato: {e}")
-
-    return HttpResponse(f"""
-    <!DOCTYPE html>
-    <html lang="uz">
-    <head>
-        <meta charset="UTF-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-        <title>Reels Yuklash</title>
-        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
-        <style>
-            :root {{ --neon: #00f2ff; --nav-bg: rgba(0, 0, 0, 0.8); }}
-
-            body {{ 
-                margin: 0; 
-                padding: 0;
-                height: 100vh;
-                /* ORQA FON RASMI */
-                background: url('{bg_image_url}') no-repeat center center fixed; 
-                background-size: cover; 
-                color: white; 
-                font-family: 'Segoe UI', sans-serif; 
-                display: flex; 
-                justify-content: center; 
-                align-items: center; 
-            }}
-
-            .overlay {{ 
-                position: fixed; top: 0; left: 0; width: 100%; height: 100%; 
-                background: rgba(0, 0, 0, 0.75); z-index: 1; 
-            }}
-
-            .card {{ 
-                position: relative;
-                z-index: 10;
-                background: rgba(255, 255, 255, 0.1); 
-                backdrop-filter: blur(20px);
-                -webkit-backdrop-filter: blur(20px);
-                padding: 30px; 
-                border-radius: 35px; 
-                border: 1px solid rgba(0, 242, 255, 0.3); 
-                width: 85%; 
-                max-width: 380px; 
-                text-align: center; 
-                box-shadow: 0 20px 50px rgba(0,0,0,0.6); 
-            }}
-
-            h2 {{ color: var(--neon); letter-spacing: 2px; margin-bottom: 25px; text-transform: uppercase; font-size: 18px; font-weight: 800; }}
-
-            input[type="text"] {{ 
-                width: 100%; padding: 15px; margin-bottom: 15px; border-radius: 15px; 
-                border: 1px solid rgba(255,255,255,0.2); background: rgba(0,0,0,0.4); 
-                color: white; box-sizing: border-box; outline: none; font-size: 15px;
-            }}
-            input[type="text"]:focus {{ border-color: var(--neon); box-shadow: 0 0 10px rgba(0,242,255,0.2); }}
-
-            .file-box {{ 
-                display: block; padding: 25px; border: 2px dashed rgba(0,242,255,0.4); 
-                border-radius: 20px; cursor: pointer; margin-bottom: 20px; transition: 0.3s; 
-                background: rgba(0,0,0,0.2);
-            }}
-            .file-box:hover {{ border-color: var(--neon); background: rgba(0,242,255,0.1); }}
-
-            .btn-submit {{ 
-                width: 100%; padding: 18px; border-radius: 20px; border: none; 
-                background: var(--neon); color: #000; font-weight: 900; 
-                cursor: pointer; text-transform: uppercase; transition: 0.3s;
-                font-size: 14px;
-            }}
-            .btn-submit:active {{ transform: scale(0.95); }}
-
-            /* YUKLASH LOADING */
-            #loading {{ display: none; margin-top: 15px; font-size: 14px; color: var(--neon); }}
-            .spinner {{ 
-                display: inline-block; width: 15px; height: 15px; border: 3px solid rgba(0,242,255,0.3);
-                border-radius: 50%; border-top-color: var(--neon); animation: spin 1s ease-in-out infinite;
-                margin-right: 10px;
-            }}
-            @keyframes spin {{ to {{ transform: rotate(360deg); }} }}
-
-            /* BOTTOM NAV */
-            .bottom-nav {{
-                position: fixed; bottom: 0; left: 0; width: 100%;
-                background: var(--nav-bg); backdrop-filter: blur(15px);
-                display: flex; justify-content: space-around; padding: 15px 0 30px;
-                border-top: 1px solid rgba(255,255,255,0.1); z-index: 1000;
-            }}
-            .nav-item {{ text-decoration: none; color: #777; display: flex; flex-direction: column; align-items: center; font-size: 10px; }}
-            .nav-item i {{ font-size: 22px; margin-bottom: 4px; }}
-            .nav-item.active {{ color: var(--neon); }}
-        </style>
-    </head>
-    <body>
-        <div class="overlay"></div>
-
-        <div class="card">
-            <h2><i class="fas fa-cloud-upload-alt"></i> REELS YUKLASH</h2>
-
-            <form id="uploadForm" method="POST" enctype="multipart/form-data">
-                <input type="text" name="title" placeholder="Video uchun qisqa sarlavha..." required>
-
-                <label class="file-box" id="dropZone">
-                    <i class="fas fa-play-circle" style="font-size: 40px; color: var(--neon); margin-bottom: 10px;"></i>
-                    <p id="fn" style="margin: 0; font-size: 13px; color: #bbb; font-weight: 500;">Videoni bu yerga bosing</p>
-                    <input type="file" name="video" id="videoInput" accept="video/*" required style="display:none">
-                </label>
-
-                <button type="submit" class="btn-submit" id="submitBtn">YUKLASHNI BOSHLASH</button>
-
-                <div id="loading">
-                    <div class="spinner"></div> Video yuklanmoqda, iltimos kuting...
-                </div>
-            </form>
-        </div>
-
-        <nav class="bottom-nav">
-            <a href="/second/" class="nav-item"><i class="fas fa-th-large"></i><span>Menyu</span></a>
-            <a href="/library/" class="nav-item"><i class="fas fa-book"></i><span>Kutubxona</span></a>
-            <a href="/reels/" class="nav-item active"><i class="fas fa-play-circle"></i><span>Reels</span></a>
-            <a href="/profile/" class="nav-item"><i class="fas fa-user"></i><span>Profil</span></a>
-        </nav>
-
-        <script>
-            const videoInput = document.getElementById('videoInput');
-            const fnLabel = document.getElementById('fn');
-            const uploadForm = document.getElementById('uploadForm');
-            const submitBtn = document.getElementById('submitBtn');
-            const loadingDiv = document.getElementById('loading');
-
-            videoInput.onchange = function() {{
-                if(this.files.length > 0) {{
-                    fnLabel.innerText = "Tanlandi: " + this.files[0].name;
-                    fnLabel.style.color = "white";
-                    document.getElementById('dropZone').style.borderColor = "var(--neon)";
-                }}
-            }};
-
-            uploadForm.onsubmit = function() {{
-                submitBtn.style.display = "none";
-                loadingDiv.style.display = "block";
-            }};
-        </script>
-    </body>
-    </html>
-    """)
 def generate_html(cards_html, active_title, task_msg):
     bg_image_url = static('12.jpg')
 
@@ -2192,7 +1667,6 @@ def subjects_view(request):
         <nav class="bottom-nav">
             <a href="/second/" class="nav-item"><i class="fas fa-th-large"></i><span>Menyu</span></a>
             <a href="/library/" class="nav-item active"><i class="fas fa-book"></i><span>Kutubxona</span></a>
-            <a href="/reels/" class="nav-item"><i class="fas fa-play-circle"></i><span>Reels</span></a>
             <a href="/profile/" class="nav-item"><i class="fas fa-user"></i><span>Profil</span></a>
         </nav>
     </body>
@@ -2430,7 +1904,7 @@ def teacher_dashboard(request):
     <div class="overlay"></div>
     <div class="container">
         <div class="header">
-            <div style="color:var(--neon); font-weight:900; font-size:18px;">MENTOR<span style="color:white; font-weight:100;">PRO</span></div>
+            <div style="color:var(--neon); font-weight:900; font-size:18px;">O'qituvchi<span style="color:white; font-weight:100;">Sahifasi</span></div>
             <a href="/teacher-profile/" class="user-chip">
                 <span>{teacher.full_name.split()[0]}</span>
                 <div style="width:20px; height:20px; background:var(--neon); border-radius:50%; color:black; display:flex; align-items:center; justify-content:center; font-weight:bold; font-size:10px;">{teacher.full_name[0]}</div>
@@ -2682,8 +2156,6 @@ def view_projects_view(request):
 </html>
     """
     return HttpResponse(html)
-def teacher_statistics(request):
-    return HttpResponse("<h2 style='color:white; text-align:center; margin-top:50px;'>Statistika sahifasi tayyorlanmoqda...</h2>")
 def teacher_schedule(request):
     if not request.user.is_authenticated: return redirect('/')
 
@@ -2798,80 +2270,6 @@ def teacher_schedule(request):
 </body>
 </html>
 """)
-def upload_video_view(request):
-    # 1. Foydalanuvchini sessiyadan tekshirish
-    user_login = request.session.get('user_login')
-    if not user_login:
-        return redirect('/')
-
-    user_profile = get_object_or_404(Profile, login=user_login)
-    token = get_token(request)
-
-    # 2. POST so'rovi kelganda videoni saqlash
-    if request.method == "POST" and request.FILES.get('video_file'):
-        try:
-            # Videoni bazaga yaratish
-            Video.objects.create(
-                author=user_profile,
-                video_file=request.FILES.get('video_file'),
-                title=request.POST.get('description', '')
-            )
-
-            # Muvaffaqiyatli yuklangandan keyin reels sahifasiga o'tish
-            return redirect('/reels/')
-
-        except Exception as e:
-            # Xatolik yuz bersa terminalga va ekranga chiqarish
-            print(f"Video yuklashda xato: {e}")
-            return HttpResponse(f"Xatolik yuz berdi: {e}")
-
-    # 3. GET so'rovi yoki xatolik bo'lmaganda sahifa dizaynini ko'rsatish
-    bg_image = static('12.jpg')
-    avatar = user_profile.image.url if user_profile.image else static('default_avatar.png')
-
-    html = f"""
-    <!DOCTYPE html>
-    <html lang="uz">
-    <head>
-        <meta charset="UTF-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
-        <style>
-            :root {{ --neon: #00f2ff; }}
-            body {{ 
-                margin: 0; background: #000 url('{bg_image}') no-repeat center center fixed; 
-                background-size: cover; font-family: sans-serif;
-                display: flex; justify-content: center; align-items: center; height: 100vh;
-            }}
-            .card {{ 
-                background: rgba(255,255,255,0.1); backdrop-filter: blur(20px); 
-                border-radius: 30px; border: 1px solid rgba(0,242,255,0.3);
-                width: 85%; max-width: 380px; padding: 30px; text-align: center; color: white;
-            }}
-            .avatar-img {{ width: 70px; height: 70px; border-radius: 50%; border: 2px solid var(--neon); object-fit: cover; margin-bottom: 10px; }}
-            .btn {{ width: 100%; padding: 15px; border-radius: 15px; border: none; background: var(--neon); color: #000; font-weight: bold; cursor: pointer; margin-top: 15px; transition: 0.3s; }}
-            .btn:hover {{ opacity: 0.8; transform: scale(1.02); }}
-            textarea {{ width: 100%; padding: 10px; margin: 10px 0; border-radius: 10px; background: rgba(0,0,0,0.4); color: white; border: 1px solid #444; box-sizing: border-box; resize: none; outline: none; }}
-            textarea:focus {{ border-color: var(--neon); }}
-            input[type="file"] {{ margin: 15px 0; color: #ccc; font-size: 13px; }}
-        </style>
-    </head>
-    <body>
-        <div class="card">
-            <img src="{avatar}" class="avatar-img">
-            <h2 style="margin: 0 0 10px 0; letter-spacing: 1px; text-transform: uppercase;">Video Yuklash</h2>
-            <form method="POST" enctype="multipart/form-data">
-                <input type="hidden" name="csrfmiddlewaretoken" value="{token}">
-                <input type="file" name="video_file" accept="video/*" required>
-                <textarea name="description" placeholder="Video haqida qisqacha..." rows="2" required></textarea>
-                <button type="submit" class="btn">ULASHISH</button>
-            </form>
-            <a href="/reels/" style="color: #888; text-decoration: none; display: block; margin-top: 20px; font-size: 13px;">BEKOR QILISH</a>
-        </div>
-    </body>
-    </html>
-    """
-    return HttpResponse(html)
 def add_student_view(request):
     teacher = TeacherProfile.objects.filter(user=request.user).first()
 
@@ -3631,110 +3029,6 @@ def send_help_request(request, teacher_id):
             return HttpResponse(f"Xatolik yuz berdi: {e}")
 
     return redirect('/ask-teacher/')
-def public_profile_view(request, username):
-    # 1. Ma'lumotlarni bazadan olish (Yutuqlar olib tashlandi)
-    target_user = get_object_or_404(Profile, login=username)
-    posts_count = Post.objects.filter(author=target_user).count()
-
-    # 2. Sessiyadagi foydalanuvchini tekshirish
-    current_user_login = request.session.get('user_login')
-    current_user = None
-    is_following = False
-
-    if current_user_login:
-        current_user = Profile.objects.filter(login=current_user_login).first()
-        if current_user:
-            is_following = target_user.followers.filter(id=current_user.id).exists()
-
-    # 3. Rasmlar va Statik fayllar
-    avatar_url = target_user.image.url if target_user.image else static('default_avatar.png')
-    bg_image = static('12.jpg')
-
-    # 4. Tugma mantiqi
-    if is_following:
-        follow_btn_text = "Obunani bekor qilish"
-        follow_btn_class = "unfollow-btn"
-        follow_url = f"/unfollow/{target_user.login}/"
-    else:
-        follow_btn_text = "Obuna bo'lish"
-        follow_btn_class = "follow-btn"
-        follow_url = f"/follow/{target_user.login}/"
-
-    # 5. HTML javobi (Yutuqlar va XP ballarsiz)
-    html_content = f"""
-    <!DOCTYPE html>
-    <html lang="uz">
-    <head>
-        <meta charset="UTF-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>{target_user.full_name} | Profil</title>
-        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
-        <style>
-            :root {{ --neon: #00f2ff; }}
-            body {{
-                background: url('{bg_image}') center/cover fixed;
-                font-family: 'Segoe UI', sans-serif;
-                margin: 0;
-                color: white;
-            }}
-            .overlay {{
-                position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-                background: rgba(0,0,0,0.85); z-index: -1;
-            }}
-            .profile-card {{
-                max-width: 400px; margin: 60px auto; padding: 40px 20px;
-                background: rgba(255,255,255,0.05); backdrop-filter: blur(20px);
-                border-radius: 40px; text-align: center; border: 1px solid rgba(255,255,255,0.1);
-            }}
-            .avatar {{
-                width: 110px; height: 110px; border-radius: 50%;
-                border: 3px solid var(--neon); object-fit: cover;
-                box-shadow: 0 0 20px rgba(0,242,255,0.3);
-            }}
-            .stats {{ display: flex; justify-content: space-around; margin: 30px 0; border-top: 1px solid #333; border-bottom: 1px solid #333; padding: 15px 0; }}
-            .stats b {{ font-size: 18px; color: var(--neon); }}
-            .stats small {{ color: #888; text-transform: uppercase; font-size: 10px; letter-spacing: 1px; }}
-
-            .follow-btn {{ background: var(--neon); color: black; padding: 12px 30px; border-radius: 25px; text-decoration: none; font-weight: bold; display: inline-block; }}
-            .unfollow-btn {{ background: rgba(255,255,255,0.1); color: white; padding: 12px 30px; border-radius: 25px; text-decoration: none; border: 1px solid #444; display: inline-block; }}
-
-            .bottom-nav {{ position:fixed; bottom:0; left:0; width:100%; background:rgba(0,0,0,0.9); display:flex; justify-content:space-around; padding:15px 0; border-top:1px solid rgba(255,255,255,0.1); z-index:1000; }}
-            .nav-item {{ text-decoration:none; color:#666; display:flex; flex-direction:column; align-items:center; font-size:10px; gap:4px; }}
-            .nav-item i {{ font-size:22px; }}
-        </style>
-    </head>
-    <body>
-        <div class="overlay"></div>
-
-        <div class="profile-card">
-            <img src="{avatar_url}" class="avatar" alt="Avatar">
-            <h2 style="margin: 15px 0 5px 0; letter-spacing: 1px;">{target_user.full_name}</h2>
-            <p style="color: #888; margin-bottom: 25px;">@{target_user.login}</p>
-
-            <div class="stats">
-                <div><b>{posts_count}</b><br><small>Postlar</small></div>
-                <div><b>{target_user.followers.count()}</b><br><small>Obunachilar</small></div>
-                <div><b>{target_user.following.count()}</b><br><small>Obunalar</small></div>
-            </div>
-
-            <div style="margin-top: 25px; display: flex; align-items: center; justify-content: center; gap: 15px;">
-                <a href="{follow_url}" class="{follow_btn_class}">{follow_btn_text}</a>
-                <a href="/chat/{target_user.login}/" style="color: var(--neon); text-decoration: none; background: rgba(0,242,255,0.1); width: 45px; height: 45px; border-radius: 50%; display: flex; align-items: center; justify-content: center; border: 1px solid var(--neon);">
-                    <i class="fas fa-comment-dots"></i>
-                </a>
-            </div>
-        </div>
-
-        <nav class="bottom-nav">
-            <a href="/second/" class="nav-item"><i class="fas fa-th-large"></i><span>Menyu</span></a>
-            <a href="/library/" class="nav-item"><i class="fas fa-book"></i><span>Kutubxona</span></a>
-            <a href="/reels/" class="nav-item"><i class="fas fa-play-circle"></i><span>Reels</span></a>
-            <a href="/profile/" class="nav-item"><i class="fas fa-user"></i><span>Profil</span></a>
-        </nav>
-    </body>
-    </html>
-    """
-    return HttpResponse(html_content)
 def teacher_homeworks(request):
     if not request.user.is_authenticated:
         return redirect('/')
@@ -3858,139 +3152,6 @@ def teacher_homeworks(request):
 </html>
     """
     return HttpResponse(html)
-def upload_reel(request):
-    if not request.user.is_authenticated:
-        return redirect('/')
-
-    if request.method == "POST" and request.FILES.get('reel_video'):
-        try:
-            teacher = request.user.teacherprofile
-            video = request.FILES['reel_video']
-            caption = request.POST.get('caption', '')
-
-            TeacherReels.objects.create(teacher=teacher, video=video, caption=caption)
-            return redirect('/teacher-profile/')
-        except Exception:
-            return redirect('/')
-
-    # Orqa fon rasmi va Token
-    bg_image = static('12.jpg')
-    token = get_token(request)
-
-    return HttpResponse(f"""
-<!DOCTYPE html>
-<html lang="uz">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Video yuklash</title>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
-    <style>
-        :root {{ --neon: #00f2ff; }}
-        body {{ 
-            margin: 0; 
-            background: url('{bg_image}') center/cover fixed no-repeat; 
-            font-family: 'Segoe UI', sans-serif; 
-            color: white; 
-            height: 100vh; 
-            display: flex; 
-            align-items: center; 
-            justify-content: center;
-        }}
-        .overlay {{ 
-            position: fixed; top: 0; left: 0; width: 100%; height: 100%; 
-            background: rgba(0,0,0,0.85); z-index: -1; 
-        }}
-        .upload-card {{
-            background: rgba(255, 255, 255, 0.05);
-            padding: 30px 20px;
-            border-radius: 30px;
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            backdrop-filter: blur(15px);
-            width: 90%;
-            max-width: 400px;
-            text-align: center;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
-        }}
-        h2 {{ color: var(--neon); margin-bottom: 25px; font-weight: 600; letter-spacing: 1px; }}
-
-        .file-input-wrapper {{
-            margin-bottom: 20px;
-        }}
-        input[type="file"] {{
-            background: rgba(255, 255, 255, 0.1);
-            padding: 15px;
-            border-radius: 15px;
-            width: 100%;
-            box-sizing: border-box;
-            color: #ccc;
-            border: 1px dashed var(--neon);
-            cursor: pointer;
-        }}
-        input[type="text"] {{
-            background: rgba(255, 255, 255, 0.08);
-            border: 1px solid rgba(0, 242, 255, 0.2);
-            color: white;
-            padding: 15px;
-            border-radius: 15px;
-            width: 100%;
-            box-sizing: border-box;
-            margin-bottom: 25px;
-            font-size: 14px;
-        }}
-        .submit-btn {{
-            background: var(--neon);
-            color: black;
-            border: none;
-            padding: 18px;
-            border-radius: 20px;
-            width: 100%;
-            font-weight: 800;
-            cursor: pointer;
-            text-transform: uppercase;
-            letter-spacing: 1.5px;
-            box-shadow: 0 5px 20px rgba(0, 242, 255, 0.4);
-            transition: 0.3s;
-        }}
-        .submit-btn:active {{ transform: scale(0.98); }}
-
-        .back-link {{
-            display: block;
-            margin-top: 20px;
-            color: #aaa;
-            text-decoration: none;
-            font-size: 13px;
-        }}
-        .back-link:hover {{ color: white; }}
-    </style>
-</head>
-<body>
-    <div class="overlay"></div>
-    <div class="upload-card">
-        <i class="fas fa-cloud-upload-alt" style="font-size: 40px; color: var(--neon); margin-bottom: 15px;"></i>
-        <h2>Yangi Reel</h2>
-
-        <form method="POST" enctype="multipart/form-data">
-            <input type="hidden" name="csrfmiddlewaretoken" value="{token}">
-
-            <div class="file-input-wrapper">
-                <input type="file" name="reel_video" accept="video/*" required>
-            </div>
-
-            <input type="text" name="caption" placeholder="Video uchun qisqacha tavsif...">
-
-            <button type="submit" class="submit-btn">
-                <i class="fas fa-paper-plane"></i> Yuklash
-            </button>
-        </form>
-
-        <a href="/teacher-profile/" class="back-link">
-            <i class="fas fa-arrow-left"></i> Bekor qilish
-        </a>
-    </div>
-</body>
-</html>
-    """)
 def teacher_profile(request):
     if not request.user.is_authenticated:
         return redirect('/')
@@ -4784,338 +3945,4 @@ def solve_test_view(request, test_id):
     </body>
     </html>
     """)
-def teacher_reels_view(request):
-    # Barcha videolarni olish
-    all_reels = TeacherReels.objects.all().order_by('-id')
 
-    # Har bir sahifada 5 ta video ko'rsatish
-    paginator = Paginator(all_reels, 5)
-    page_number = request.GET.get('page', 1)
-    reels = paginator.get_page(page_number)
-
-    # Agar bu AJAX so'rovi bo'lsa (pastga tushganda yangi videolar yuklash uchun)
-    if request.headers.get('x-requested-with') == 'XMLHttpRequest':
-        # Faqat yangi videolarni HTML qismini qaytarish mumkin (ixtiyoriy)
-        pass
-
-    context = {
-        'reels': reels,
-    }
-    # Bu yerda render ishlatish tavsiya etiladi, lekin HttpResponse f-stringda bo'lsa:
-    reels_html = ""
-    for r in reels:
-        reels_html += f"""
-        <div class="reel-video-container">
-            <video class="reel-video" loop preload="metadata" playsinline webkit-playsinline>
-                <source src="{r.video.url}" type="video/mp4">
-                Sizning brauzeringiz videoni qo'llab-quvvatlamaydi.
-            </video>
-            <div class="video-info">
-                <h3>@{r.teacher.username if r.teacher else 'Ustoz'}</h3>
-                <p>{r.caption or ''}</p>
-            </div>
-            <div class="play-pause-overlay">
-                <i class="fas fa-play"></i>
-            </div>
-        </div>
-        """
-
-    # HTML qaytarish (Asosiy struktura)
-    return HttpResponse(f"""
-    <!DOCTYPE html>
-    <html>
-    <head>
-        <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
-        <style>
-            body, html {{ margin: 0; padding: 0; height: 100%; background: #000; overflow: hidden; }}
-            .reels-wrapper {{
-                height: 100vh;
-                scroll-snap-type: y mandatory;
-                overflow-y: scroll;
-                -webkit-overflow-scrolling: touch;
-            }}
-            .reel-video-container {{
-                height: 100vh;
-                width: 100%;
-                scroll-snap-align: start;
-                position: relative;
-                display: flex;
-                align-items: center;
-                justify-content: center;
-                background: #000;
-            }}
-            .reel-video {{
-                width: 100%;
-                height: 100%;
-                object-fit: contain; /* Video kesilib ketmasligi uchun */
-            }}
-            .video-info {{
-                position: absolute; bottom: 80px; left: 20px; color: white; z-index: 10;
-                text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
-            }}
-            .play-pause-overlay {{
-                position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
-                font-size: 50px; color: white; opacity: 0; pointer-events: none; transition: 0.2s;
-            }}
-        </style>
-    </head>
-    <body>
-        <div class="reels-wrapper" id="reelsContainer">
-            {reels_html}
-        </div>
-
-        <script>
-            // Intersection Observer: Faqat ekranda ko'rinayotgan videoni qo'yish
-            const options = {{ threshold: 0.6 }};
-            const observer = new IntersectionObserver((entries) => {{
-                entries.forEach(entry => {{
-                    const video = entry.target.querySelector('video');
-                    if (entry.isIntersecting) {{
-                        // Video ekranga kirdi - ijro etish
-                        video.play().catch(e => console.log("Avtoplay to'sildi"));
-                        video.setAttribute('preload', 'auto');
-                    }} else {{
-                        // Video ekrandan chiqdi - to'xtatish (Xotirani tejash uchun)
-                        video.pause();
-                        video.currentTime = 0; // Resursni bo'shatish
-                    }}
-                }});
-            }}, options);
-
-            document.querySelectorAll('.reel-video-container').forEach(container => {{
-                observer.observe(container);
-            }});
-
-            // Click orqali play/pause
-            document.querySelectorAll('.reel-video-container').forEach(container => {{
-                container.addEventListener('click', () => {{
-                    const video = container.querySelector('video');
-                    if (video.paused) {{
-                        video.play();
-                    }} else {{
-                        video.pause();
-                    }}
-                }});
-            }});
-        </script>
-    </body>
-    </html>
-    """)
-def get_reels_template(content):
-    return f"""
-<!DOCTYPE html>
-<html lang="uz">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
-    <style>
-        body, html {{ margin: 0; padding: 0; height: 100vh; background: #000; overflow: hidden; }}
-
-        /* Reels konteyneri - scrollni boshqaradi */
-        .reels-container {{
-            height: 100vh;
-            overflow-y: scroll;
-            scroll-snap-type: y mandatory; /* Videolarni bittalab to'xtatadi */
-            -webkit-overflow-scrolling: touch;
-        }}
-
-        .reel-section {{
-            height: 100vh;
-            width: 100vw;
-            scroll-snap-align: start;
-            position: relative;
-            background: #000;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }}
-
-        video {{
-            width: 100%;
-            height: 100%;
-            object-fit: contain; /* Video kesilib ketmasligi uchun */
-            z-index: 1;
-        }}
-
-        .reel-overlay {{
-            position: absolute; inset: 0; z-index: 2;
-            background: linear-gradient(0deg, rgba(0,0,0,0.6) 0%, transparent 40%);
-            pointer-events: none; /* Video bosilishiga xalaqit bermaydi */
-        }}
-
-        .reel-details {{ position: absolute; bottom: 100px; left: 20px; color: white; }}
-        .reel-actions {{ position: absolute; right: 15px; bottom: 120px; display: flex; flex-direction: column; gap: 20px; pointer-events: auto; }}
-        .action-btn {{ color: white; text-align: center; font-size: 25px; }}
-        .action-btn span {{ display: block; font-size: 12px; margin-top: 5px; }}
-
-        .play-icon-overlay {{
-            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
-            color: white; font-size: 60px; opacity: 0; z-index: 3; pointer-events: none;
-        }}
-    </style>
-</head>
-<body>
-    <div class="reels-container" id="reelsHost">
-        {content}
-    </div>
-
-    <script>
-        const observerOptions = {{ threshold: 0.7 }};
-
-        const observer = new IntersectionObserver((entries) => {{
-            entries.forEach(entry => {{
-                const video = entry.target.querySelector('video');
-                if (entry.isIntersecting) {{
-                    // Video ekranda ko'rinsa - yuklash va qo'yish
-                    video.style.opacity = "1";
-                    video.play().catch(() => {{}});
-                }} else {{
-                    // Video ekrandan chiqsa - to'xtatish va yuklashni to'xtatish
-                    video.pause();
-                    video.style.opacity = "0.5";
-                    // Muhim: Videoni yuklashni to'xtatib turadi (internetni tejaydi)
-                    video.removeAttribute('src'); 
-                    video.load(); 
-                }}
-            }});
-        }}, observerOptions);
-
-        document.querySelectorAll('.reel-section').forEach(section => observer.observe(section));
-
-        // Video bosilganda Play/Pause
-        document.querySelectorAll('.reel-section').forEach(section => {{
-            section.onclick = function() {{
-                const v = this.querySelector('video');
-                if(v.paused) v.play(); else v.pause();
-            }};
-        }});
-    </script>
-</body>
-</html>
-"""
-
-
-def general_reels_view(request):
-    # 1. O'qituvchilar videolarini olish
-    t_reels = TeacherReels.objects.all().order_by('-id')[:15]
-
-    # 2. O'quvchilar (Post) videolarini olish
-    s_reels = Post.objects.all().order_by('-id')[:15]
-
-    # 3. Ikkala ro'yxatni birlashtirish va aralashtirish
-    all_reels = list(chain(t_reels, s_reels))
-    random.shuffle(all_reels)  # Videolar aralashib chiqishi uchun
-
-    reels_list_html = ""
-    for r in all_reels:
-        # Video URL va muallifni aniqlash (Model turiga qarab)
-        if isinstance(r, TeacherReels):
-            v_url = r.video.url
-            author = r.teacher.full_name
-            caption = r.caption
-        else:
-            v_url = r.video.url
-            author = r.author.full_name
-            caption = r.description
-
-        reels_list_html += f"""
-        <div class="reel-item">
-            <video class="video-player" 
-                   playsinline 
-                   webkit-playsinline 
-                   loop 
-                   preload="none" 
-                   data-src="{v_url}">
-                <source src="" type="video/mp4">
-            </video>
-
-            <div class="ui-layer">
-                <div class="info-side">
-                    <h3 style="margin:0; font-size:16px; color:#00f2ff;">@{author}</h3>
-                    <p style="margin:5px 0 0; font-size:14px; color:white;">{caption or ''}</p>
-                </div>
-                <div class="actions-side">
-                    <div class="action-btn"><i class="fas fa-heart"></i><span>{random.randint(10, 500)}</span></div>
-                    <div class="action-btn"><i class="fas fa-comment"></i><span>{random.randint(2, 50)}</span></div>
-                    <div class="action-btn"><i class="fas fa-share"></i></div>
-                </div>
-            </div>
-            <div class="loader-spinner"></div>
-        </div>
-        """
-
-    # HTML dizayn (Snap Scroll va RAM tozalash texnologiyasi bilan)
-    return HttpResponse(f"""
-<!DOCTYPE html>
-<html lang="uz">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
-    <style>
-        body, html {{ margin: 0; padding: 0; height: 100vh; background: #000; overflow: hidden; font-family: sans-serif; }}
-        .main-container {{
-            height: 100vh; overflow-y: scroll;
-            scroll-snap-type: y mandatory; -webkit-overflow-scrolling: touch;
-        }}
-        .reel-item {{
-            height: 100vh; width: 100vw; scroll-snap-align: start;
-            position: relative; display: flex; align-items: center; justify-content: center; background:#000;
-        }}
-        video {{ width: 100%; height: 100%; object-fit: contain; }}
-        .ui-layer {{
-            position: absolute; inset: 0; z-index: 10;
-            background: linear-gradient(0deg, rgba(0,0,0,0.5) 0%, transparent 40%);
-            display: flex; flex-direction: column; justify-content: flex-end;
-            padding: 20px; padding-bottom: 80px; pointer-events: none;
-        }}
-        .info-side, .actions-side {{ pointer-events: auto; }}
-        .actions-side {{ position: absolute; right: 15px; bottom: 120px; display: flex; flex-direction: column; gap: 25px; }}
-        .action-btn {{ color: white; text-align: center; font-size: 28px; text-shadow: 0 2px 10px #000; }}
-        .action-btn span {{ display: block; font-size: 12px; margin-top: 5px; font-weight: bold; }}
-        .loader-spinner {{
-            position: absolute; z-index: 5; width: 40px; height: 40px;
-            border: 3px solid rgba(255,255,255,0.1); border-top: 3px solid #00f2ff;
-            border-radius: 50%; animation: spin 1s linear infinite; display: none;
-        }}
-        @keyframes spin {{ 0% {{ transform: rotate(0deg); }} 100% {{ transform: rotate(360deg); }} }}
-    </style>
-</head>
-<body>
-    <div class="main-container">
-        {reels_list_html}
-    </div>
-    <script>
-        const obs = new IntersectionObserver((entries) => {{
-            entries.forEach(entry => {{
-                const video = entry.target.querySelector('video');
-                const loader = entry.target.querySelector('.loader-spinner');
-                const src = video.getAttribute('data-src');
-
-                if (entry.isIntersecting) {{
-                    loader.style.display = "block";
-                    video.src = src; 
-                    video.load();
-                    video.play().then(() => loader.style.display = "none").catch(() => {{}});
-                }} else {{
-                    video.pause();
-                    video.src = ""; // Telefon qotmasligi uchun xotirani bo'shatish
-                    video.load();
-                }}
-            }});
-        }}, {{ threshold: 0.6 }});
-
-        document.querySelectorAll('.reel-item').forEach(item => obs.observe(item));
-
-        document.querySelectorAll('.reel-item').forEach(item => {{
-            item.onclick = () => {{
-                const v = item.querySelector('video');
-                v.paused ? v.play() : v.pause();
-            }};
-        }});
-    </script>
-</body>
-</html>
-    """)
