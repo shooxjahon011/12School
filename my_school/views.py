@@ -1,4 +1,4 @@
-
+from django.core.paginator import Paginator
 from django.utils import timezone
 from django.shortcuts import redirect,get_object_or_404,render
 from django.http import HttpResponse
@@ -4783,3 +4783,241 @@ def solve_test_view(request, test_id):
     </body>
     </html>
     """)
+def teacher_reels_view(request):
+    # Barcha videolarni olish
+    all_reels = TeacherReels.objects.all().order_by('-id')
+
+    # Har bir sahifada 5 ta video ko'rsatish
+    paginator = Paginator(all_reels, 5)
+    page_number = request.GET.get('page', 1)
+    reels = paginator.get_page(page_number)
+
+    # Agar bu AJAX so'rovi bo'lsa (pastga tushganda yangi videolar yuklash uchun)
+    if request.headers.get('x-requested-with') == 'XMLHttpRequest':
+        # Faqat yangi videolarni HTML qismini qaytarish mumkin (ixtiyoriy)
+        pass
+
+    context = {
+        'reels': reels,
+    }
+    # Bu yerda render ishlatish tavsiya etiladi, lekin HttpResponse f-stringda bo'lsa:
+    reels_html = ""
+    for r in reels:
+        reels_html += f"""
+        <div class="reel-video-container">
+            <video class="reel-video" loop preload="metadata" playsinline webkit-playsinline>
+                <source src="{r.video.url}" type="video/mp4">
+                Sizning brauzeringiz videoni qo'llab-quvvatlamaydi.
+            </video>
+            <div class="video-info">
+                <h3>@{r.teacher.username if r.teacher else 'Ustoz'}</h3>
+                <p>{r.caption or ''}</p>
+            </div>
+            <div class="play-pause-overlay">
+                <i class="fas fa-play"></i>
+            </div>
+        </div>
+        """
+
+    # HTML qaytarish (Asosiy struktura)
+    return HttpResponse(f"""
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+        <style>
+            body, html {{ margin: 0; padding: 0; height: 100%; background: #000; overflow: hidden; }}
+            .reels-wrapper {{
+                height: 100vh;
+                scroll-snap-type: y mandatory;
+                overflow-y: scroll;
+                -webkit-overflow-scrolling: touch;
+            }}
+            .reel-video-container {{
+                height: 100vh;
+                width: 100%;
+                scroll-snap-align: start;
+                position: relative;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                background: #000;
+            }}
+            .reel-video {{
+                width: 100%;
+                height: 100%;
+                object-fit: contain; /* Video kesilib ketmasligi uchun */
+            }}
+            .video-info {{
+                position: absolute; bottom: 80px; left: 20px; color: white; z-index: 10;
+                text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
+            }}
+            .play-pause-overlay {{
+                position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+                font-size: 50px; color: white; opacity: 0; pointer-events: none; transition: 0.2s;
+            }}
+        </style>
+    </head>
+    <body>
+        <div class="reels-wrapper" id="reelsContainer">
+            {reels_html}
+        </div>
+
+        <script>
+            // Intersection Observer: Faqat ekranda ko'rinayotgan videoni qo'yish
+            const options = {{ threshold: 0.6 }};
+            const observer = new IntersectionObserver((entries) => {{
+                entries.forEach(entry => {{
+                    const video = entry.target.querySelector('video');
+                    if (entry.isIntersecting) {{
+                        // Video ekranga kirdi - ijro etish
+                        video.play().catch(e => console.log("Avtoplay to'sildi"));
+                        video.setAttribute('preload', 'auto');
+                    }} else {{
+                        // Video ekrandan chiqdi - to'xtatish (Xotirani tejash uchun)
+                        video.pause();
+                        video.currentTime = 0; // Resursni bo'shatish
+                    }}
+                }});
+            }}, options);
+
+            document.querySelectorAll('.reel-video-container').forEach(container => {{
+                observer.observe(container);
+            }});
+
+            // Click orqali play/pause
+            document.querySelectorAll('.reel-video-container').forEach(container => {{
+                container.addEventListener('click', () => {{
+                    const video = container.querySelector('video');
+                    if (video.paused) {{
+                        video.play();
+                    }} else {{
+                        video.pause();
+                    }}
+                }});
+            }});
+        </script>
+    </body>
+    </html>
+    """)
+def get_reels_template(content):
+    return f"""
+<!DOCTYPE html>
+<html lang="uz">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        body, html {{ margin: 0; padding: 0; height: 100vh; background: #000; overflow: hidden; }}
+
+        /* Reels konteyneri - scrollni boshqaradi */
+        .reels-container {{
+            height: 100vh;
+            overflow-y: scroll;
+            scroll-snap-type: y mandatory; /* Videolarni bittalab to'xtatadi */
+            -webkit-overflow-scrolling: touch;
+        }}
+
+        .reel-section {{
+            height: 100vh;
+            width: 100vw;
+            scroll-snap-align: start;
+            position: relative;
+            background: #000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }}
+
+        video {{
+            width: 100%;
+            height: 100%;
+            object-fit: contain; /* Video kesilib ketmasligi uchun */
+            z-index: 1;
+        }}
+
+        .reel-overlay {{
+            position: absolute; inset: 0; z-index: 2;
+            background: linear-gradient(0deg, rgba(0,0,0,0.6) 0%, transparent 40%);
+            pointer-events: none; /* Video bosilishiga xalaqit bermaydi */
+        }}
+
+        .reel-details {{ position: absolute; bottom: 100px; left: 20px; color: white; }}
+        .reel-actions {{ position: absolute; right: 15px; bottom: 120px; display: flex; flex-direction: column; gap: 20px; pointer-events: auto; }}
+        .action-btn {{ color: white; text-align: center; font-size: 25px; }}
+        .action-btn span {{ display: block; font-size: 12px; margin-top: 5px; }}
+
+        .play-icon-overlay {{
+            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            color: white; font-size: 60px; opacity: 0; z-index: 3; pointer-events: none;
+        }}
+    </style>
+</head>
+<body>
+    <div class="reels-container" id="reelsHost">
+        {content}
+    </div>
+
+    <script>
+        const observerOptions = {{ threshold: 0.7 }};
+
+        const observer = new IntersectionObserver((entries) => {{
+            entries.forEach(entry => {{
+                const video = entry.target.querySelector('video');
+                if (entry.isIntersecting) {{
+                    // Video ekranda ko'rinsa - yuklash va qo'yish
+                    video.style.opacity = "1";
+                    video.play().catch(() => {{}});
+                }} else {{
+                    // Video ekrandan chiqsa - to'xtatish va yuklashni to'xtatish
+                    video.pause();
+                    video.style.opacity = "0.5";
+                    // Muhim: Videoni yuklashni to'xtatib turadi (internetni tejaydi)
+                    video.removeAttribute('src'); 
+                    video.load(); 
+                }}
+            }});
+        }}, observerOptions);
+
+        document.querySelectorAll('.reel-section').forEach(section => observer.observe(section));
+
+        // Video bosilganda Play/Pause
+        document.querySelectorAll('.reel-section').forEach(section => {{
+            section.onclick = function() {{
+                const v = this.querySelector('video');
+                if(v.paused) v.play(); else v.pause();
+            }};
+        }});
+    </script>
+</body>
+</html>
+"""
+def general_reels_view(request):
+    # Eng so'nggi 20 ta reelni olish (Hamma userlar uchun)
+    reels = TeacherReels.objects.all().order_by('-id')[:20]
+
+    reels_list_html = ""
+    for r in reels:
+        # preload="none" - bu internetni tejash uchun eng muhimi!
+        # Video faqat ko'rilganda yuklanadi.
+        reels_list_html += f"""
+        <div class="reel-section">
+            <video class="reel-video" loop playsinline webkit-playsinline preload="none" poster="/static/video_loading.jpg">
+                <source src="{r.video.url}" type="video/mp4">
+            </video>
+            <div class="reel-overlay">
+                <div class="reel-details">
+                    <h3>@{r.teacher.username if r.teacher else 'User'}</h3>
+                    <p>{r.caption or ''}</p>
+                </div>
+                <div class="reel-actions">
+                    <div class="action-btn"><i class="fas fa-heart"></i><span>Layo'sh</span></div>
+                    <div class="action-btn"><i class="fas fa-comment"></i><span>{random.randint(5, 50)}</span></div>
+                </div>
+            </div>
+            <div class="play-icon-overlay"><i class="fas fa-play"></i></div>
+        </div>
+        """
+    return HttpResponse(get_reels_template(reels_list_html))
