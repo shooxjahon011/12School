@@ -1,5 +1,6 @@
 from django.db import models
 from django.contrib.auth.models import User
+from datetime import timedelta
 from django.utils import timezone
 # ==========================================
 # 1. FOYDALANUVCHI PROFILLI (O'quvchilar)
@@ -69,36 +70,10 @@ class TeacherProfile(models.Model):
     avatar = models.ImageField(upload_to='avatars/', null=True, blank=True)
 
     def __str__(self): return self.full_name
-class TeacherReels(models.Model):
-    teacher = models.ForeignKey(TeacherProfile, on_delete=models.CASCADE, related_name='reels')
-    video = models.FileField(upload_to='reels/')
-    caption = models.CharField(max_length=255, blank=True)
-    created_at = models.DateTimeField(auto_now_add=True)
-
-    def __str__(self):
-        return f"{self.teacher.full_name} - Reel"
 
 # ==========================================
 # 3. REELS VA IJTIMOIY TIZIM
 # ==========================================
-class Post(models.Model):
-    author = models.ForeignKey(Profile, on_delete=models.CASCADE)
-    video = models.FileField(upload_to='reels/')
-    description = models.TextField(blank=True)
-    created_at = models.DateTimeField(auto_now_add=True)
-    likes = models.ManyToManyField(Profile, related_name='post_likes', blank=True)
-
-class Comment(models.Model):
-    post = models.ForeignKey(Post, on_delete=models.CASCADE, related_name='comments')
-    author = models.ForeignKey(Profile, on_delete=models.CASCADE)
-    text = models.TextField()
-    created_at = models.DateTimeField(auto_now_add=True)
-
-class Video(models.Model):
-    title = models.CharField(max_length=200)
-    video_file = models.FileField(upload_to='videos/')
-    author = models.ForeignKey(Profile, on_delete=models.CASCADE)
-    likes = models.ManyToManyField(Profile, related_name='video_likes', blank=True)
 
 # ==========================================
 # 4. CHAT TIZIMI
@@ -168,19 +143,30 @@ class ProjectWork(models.Model):
 class Book(models.Model):
     title = models.CharField(max_length=200)
     author = models.CharField(max_length=200)
-    genre = models.CharField(max_length=100)
+    genre = models.CharField(max_length=100, blank=True, null=True)
     count = models.PositiveIntegerField(default=1)
     image_url = models.URLField(blank=True, null=True)
     price = models.IntegerField(default=0, verbose_name="Narxi (XP)")
 
+    def __str__(self):
+        return self.title
+
 class Order(models.Model):
-    student = models.ForeignKey(Profile, on_delete=models.CASCADE)
+    student = models.ForeignKey('Profile', on_delete=models.CASCADE)
     book = models.ForeignKey(Book, on_delete=models.CASCADE)
     order_date = models.DateTimeField(auto_now_add=True)
+    return_deadline = models.DateTimeField(null=True, blank=True)
     status = models.CharField(max_length=20, default='Kutilmoqda')
+    is_given = models.BooleanField(default=False)
+
+    def save(self, *args, **kwargs):
+        if not self.return_deadline:
+            # 7 kunlik muddatni avtomatik belgilash
+            self.return_deadline = timezone.now() + timedelta(days=7)
+        super().save(*args, **kwargs)
 
     def __str__(self):
-        return f"{self.student.full_name} - {self.book.title}"
+        return f"{self.student.full_name} - {self.book.title} ({self.status})"
 
 # ==========================================
 # 7. YUTUQLAR VA BOSHQA
@@ -192,11 +178,7 @@ class Notification(models.Model):
     is_read = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
 
-class VideoComment(models.Model):
-    video = models.ForeignKey(Video, on_delete=models.CASCADE, related_name='comments')
-    user = models.ForeignKey(Profile, on_delete=models.CASCADE)
-    text = models.TextField()
-    created_at = models.DateTimeField(auto_now_add=True)
+
 
     def __str__(self):
         return f"{self.user.login}: {self.text[:20]}"
