@@ -5,7 +5,8 @@ from django.http import HttpResponse
 from django.templatetags.static import static
 from django.middleware.csrf import get_token
 import json
-import html
+import random
+from itertools import chain
 from django.http import JsonResponse
 from django.contrib import messages
 from django.views.decorators.csrf import csrf_exempt
@@ -4994,30 +4995,127 @@ def get_reels_template(content):
 </body>
 </html>
 """
+
+
 def general_reels_view(request):
-    # Eng so'nggi 20 ta reelni olish (Hamma userlar uchun)
-    reels = TeacherReels.objects.all().order_by('-id')[:20]
+    # 1. O'qituvchilar videolarini olish
+    t_reels = TeacherReels.objects.all().order_by('-id')[:15]
+
+    # 2. O'quvchilar (Post) videolarini olish
+    s_reels = Post.objects.all().order_by('-id')[:15]
+
+    # 3. Ikkala ro'yxatni birlashtirish va aralashtirish
+    all_reels = list(chain(t_reels, s_reels))
+    random.shuffle(all_reels)  # Videolar aralashib chiqishi uchun
 
     reels_list_html = ""
-    for r in reels:
-        # preload="none" - bu internetni tejash uchun eng muhimi!
-        # Video faqat ko'rilganda yuklanadi.
+    for r in all_reels:
+        # Video URL va muallifni aniqlash (Model turiga qarab)
+        if isinstance(r, TeacherReels):
+            v_url = r.video.url
+            author = r.teacher.full_name
+            caption = r.caption
+        else:
+            v_url = r.video.url
+            author = r.author.full_name
+            caption = r.description
+
         reels_list_html += f"""
-        <div class="reel-section">
-            <video class="reel-video" loop playsinline webkit-playsinline preload="none" poster="/static/video_loading.jpg">
-                <source src="{r.video.url}" type="video/mp4">
+        <div class="reel-item">
+            <video class="video-player" 
+                   playsinline 
+                   webkit-playsinline 
+                   loop 
+                   preload="none" 
+                   data-src="{v_url}">
+                <source src="" type="video/mp4">
             </video>
-            <div class="reel-overlay">
-                <div class="reel-details">
-                    <h3>@{r.teacher.username if r.teacher else 'User'}</h3>
-                    <p>{r.caption or ''}</p>
+
+            <div class="ui-layer">
+                <div class="info-side">
+                    <h3 style="margin:0; font-size:16px; color:#00f2ff;">@{author}</h3>
+                    <p style="margin:5px 0 0; font-size:14px; color:white;">{caption or ''}</p>
                 </div>
-                <div class="reel-actions">
-                    <div class="action-btn"><i class="fas fa-heart"></i><span>Layo'sh</span></div>
-                    <div class="action-btn"><i class="fas fa-comment"></i><span>{random.randint(5, 50)}</span></div>
+                <div class="actions-side">
+                    <div class="action-btn"><i class="fas fa-heart"></i><span>{random.randint(10, 500)}</span></div>
+                    <div class="action-btn"><i class="fas fa-comment"></i><span>{random.randint(2, 50)}</span></div>
+                    <div class="action-btn"><i class="fas fa-share"></i></div>
                 </div>
             </div>
-            <div class="play-icon-overlay"><i class="fas fa-play"></i></div>
+            <div class="loader-spinner"></div>
         </div>
         """
-    return HttpResponse(get_reels_template(reels_list_html))
+
+    # HTML dizayn (Snap Scroll va RAM tozalash texnologiyasi bilan)
+    return HttpResponse(f"""
+<!DOCTYPE html>
+<html lang="uz">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        body, html {{ margin: 0; padding: 0; height: 100vh; background: #000; overflow: hidden; font-family: sans-serif; }}
+        .main-container {{
+            height: 100vh; overflow-y: scroll;
+            scroll-snap-type: y mandatory; -webkit-overflow-scrolling: touch;
+        }}
+        .reel-item {{
+            height: 100vh; width: 100vw; scroll-snap-align: start;
+            position: relative; display: flex; align-items: center; justify-content: center; background:#000;
+        }}
+        video {{ width: 100%; height: 100%; object-fit: contain; }}
+        .ui-layer {{
+            position: absolute; inset: 0; z-index: 10;
+            background: linear-gradient(0deg, rgba(0,0,0,0.5) 0%, transparent 40%);
+            display: flex; flex-direction: column; justify-content: flex-end;
+            padding: 20px; padding-bottom: 80px; pointer-events: none;
+        }}
+        .info-side, .actions-side {{ pointer-events: auto; }}
+        .actions-side {{ position: absolute; right: 15px; bottom: 120px; display: flex; flex-direction: column; gap: 25px; }}
+        .action-btn {{ color: white; text-align: center; font-size: 28px; text-shadow: 0 2px 10px #000; }}
+        .action-btn span {{ display: block; font-size: 12px; margin-top: 5px; font-weight: bold; }}
+        .loader-spinner {{
+            position: absolute; z-index: 5; width: 40px; height: 40px;
+            border: 3px solid rgba(255,255,255,0.1); border-top: 3px solid #00f2ff;
+            border-radius: 50%; animation: spin 1s linear infinite; display: none;
+        }}
+        @keyframes spin {{ 0% {{ transform: rotate(0deg); }} 100% {{ transform: rotate(360deg); }} }}
+    </style>
+</head>
+<body>
+    <div class="main-container">
+        {reels_list_html}
+    </div>
+    <script>
+        const obs = new IntersectionObserver((entries) => {{
+            entries.forEach(entry => {{
+                const video = entry.target.querySelector('video');
+                const loader = entry.target.querySelector('.loader-spinner');
+                const src = video.getAttribute('data-src');
+
+                if (entry.isIntersecting) {{
+                    loader.style.display = "block";
+                    video.src = src; 
+                    video.load();
+                    video.play().then(() => loader.style.display = "none").catch(() => {{}});
+                }} else {{
+                    video.pause();
+                    video.src = ""; // Telefon qotmasligi uchun xotirani bo'shatish
+                    video.load();
+                }}
+            }});
+        }}, {{ threshold: 0.6 }});
+
+        document.querySelectorAll('.reel-item').forEach(item => obs.observe(item));
+
+        document.querySelectorAll('.reel-item').forEach(item => {{
+            item.onclick = () => {{
+                const v = item.querySelector('video');
+                v.paused ? v.play() : v.pause();
+            }};
+        }});
+    </script>
+</body>
+</html>
+    """)
